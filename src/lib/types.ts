@@ -86,7 +86,7 @@ export interface Bet {
   type: 'single' | 'surebet';
   sport: string;
   event: string;
-  date: string;
+  date: Date;
   status: 'pending' | 'won' | 'lost' | 'cashed_out' | 'void';
   notes?: string;
   earnedFreebetValue?: number | null; // Valor da freebet ganha com esta aposta
