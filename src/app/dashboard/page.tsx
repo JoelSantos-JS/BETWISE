@@ -31,16 +31,15 @@ import { SurebetCalculator } from '@/components/bets/surebet-calculator';
 import { AdvancedSurebetCalculator } from '@/components/bets/advanced-surebet-calculator';
 import { isToday, isThisWeek, isThisMonth } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { INITIAL_BETS } from '@/lib/data';
 
-
-const initialBets: Bet[] = [];
 
 type Period = 'day' | 'week' | 'month';
 
 export default function BetsPage() {
     const { user, loading: authLoading } = useAuth();
-    const [bets, setBets] = useState<Bet[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const [bets, setBets] = useState<Bet[]>(INITIAL_BETS.map(b => ({...b, date: new Date(b.date)})));
+    const [isLoading, setIsLoading] = useState(false);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [betToEdit, setBetToEdit] = useState<Bet | null>(null);
     const [betToDelete, setBetToDelete] = useState<Bet | null>(null);
@@ -48,25 +47,25 @@ export default function BetsPage() {
     const [summaryPeriod, setSummaryPeriod] = useState<Period>('day');
     const { toast } = useToast();
 
-     useEffect(() => {
-        if (authLoading || !user) return;
+    // This effect is commented out as Firebase is not configured yet.
+    // It can be re-enabled once a real Firebase project is set up.
+    //  useEffect(() => {
+    //     if (authLoading || !user) return;
 
-        const fetchData = async () => {
-            setIsLoading(true);
-            const docRef = doc(db, "user-data", user.uid);
-            const docSnap = await getDoc(docRef);
+    //     const fetchData = async () => {
+    //         setIsLoading(true);
+    //         const docRef = doc(db, "user-data", user.uid);
+    //         const docSnap = await getDoc(docRef);
 
-            if (docSnap.exists() && docSnap.data().bets) {
-                const data = docSnap.data().bets;
-                 const parsedBets = data.map((b: any) => ({...b, date: b.date?.toDate ? b.date.toDate() : new Date(b.date)}));
-                setBets(parsedBets);
-            } else {
-                setBets(initialBets);
-            }
-            setIsLoading(false);
-        }
-        fetchData();
-    }, [user, authLoading]);
+    //         if (docSnap.exists() && docSnap.data().bets) {
+    //             const data = docSnap.data().bets;
+    //              const parsedBets = data.map((b: any) => ({...b, date: b.date?.toDate ? b.date.toDate() : new Date(b.date)}));
+    //             setBets(parsedBets);
+    //         }
+    //         setIsLoading(false);
+    //     }
+    //     fetchData();
+    // }, [user, authLoading]);
 
     useEffect(() => {
         if (authLoading || isLoading || !user) return;
@@ -86,7 +85,8 @@ export default function BetsPage() {
                 })
             }
         }
-        saveData();
+        // Disabling save data to avoid placeholder data overriding real data
+        // saveData();
     }, [bets, user, authLoading, isLoading, toast]);
 
 
