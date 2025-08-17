@@ -3,12 +3,13 @@ import { getFirestore } from "firebase/firestore";
 
 // Em um aplicativo real, isso viria de suas variáveis de ambiente
 const firebaseConfig = {
-  apiKey: "AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
-  authDomain: "your-project-id.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project-id.appspot.com",
-  messagingSenderId: "your-sender-id",
-  appId: "your-app-id",
+  "projectId": "betwise-dashboard-19l16",
+  "appId": "1:143438143634:web:059e047733024da340c64b",
+  "storageBucket": "betwise-dashboard-19l16.firebasestorage.app",
+  "apiKey": "AIzaSyBTpEZ2WYDQgm-SEnRcGzVATKvTwFe3PsI",
+  "authDomain": "betwise-dashboard-19l16.firebaseapp.com",
+  "measurementId": "",
+  "messagingSenderId": "143438143634"
 };
 
 // Inicializa o Firebase
