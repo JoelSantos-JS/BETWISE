@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import type { Bet } from '@/lib/types';
 import { Header } from "@/components/layout/header";
 import { Button } from '@/components/ui/button';
-import { PlusCircle, BarChart, AlertTriangle, Calendar, TrendingUp, TrendingDown, Calculator, Scale, Target } from 'lucide-react';
+import { PlusCircle, BarChart, AlertTriangle, Calendar, TrendingUp, TrendingDown, Calculator, Scale, Target, Landmark, Wallet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BetCard } from '@/components/bets/bet-card';
@@ -26,75 +26,63 @@ import { BetStatusChart } from '@/components/bets/bet-status-chart';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SurebetCalculator } from '@/components/bets/surebet-calculator';
 import { AdvancedSurebetCalculator } from '@/components/bets/advanced-surebet-calculator';
-import { isToday, isThisWeek, isThisMonth } from 'date-fns';
+import { isToday, isThisWeek, isThisMonth, startOfDay, startOfWeek, startOfMonth } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { INITIAL_BETS } from '@/lib/data';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 
 type Period = 'day' | 'week' | 'month';
 
 export default function BetsPage() {
     const [bets, setBets] = useState<Bet[]>(INITIAL_BETS.map(b => ({...b, date: new Date(b.date)})));
-    const [isLoading, setIsLoading] = useState(false); // Set to false initially
+    const [isLoading, setIsLoading] = useState(false);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [betToEdit, setBetToEdit] = useState<Bet | null>(null);
     const [betToDelete, setBetToDelete] = useState<Bet | null>(null);
     const [filterStatus, setFilterStatus] = useState<string>("pending");
     const [summaryPeriod, setSummaryPeriod] = useState<Period>('day');
+    const [initialBankroll, setInitialBankroll] = useState<number>(5000);
     const { toast } = useToast();
 
     // The logic to sync with Firestore would go here in a real app,
     // but for now, we manage state locally.
 
     const summaryStats = useMemo(() => {
-        const calculateStatsForPeriod = (period: Period) => {
-            let periodBets: Bet[] = [];
-            const now = new Date();
-            if (period === 'day') {
-                periodBets = bets.filter(b => isToday(new Date(b.date)));
-            } else if (period === 'week') {
-                periodBets = bets.filter(b => isThisWeek(new Date(b.date), { weekStartsOn: 1 }));
-            } else if (period === 'month') {
-                 periodBets = bets.filter(b => isThisMonth(new Date(b.date)));
-            }
-
-            const totalStaked = periodBets.reduce((acc, bet) => {
-                if (bet.type === 'single' && bet.stake) return acc + bet.stake;
-                if (bet.type === 'surebet' && bet.totalStake) return acc + bet.totalStake;
-                return acc;
-            }, 0);
-
-            const netProfit = periodBets.reduce((acc, bet) => {
-                 if (bet.status !== 'won' && bet.status !== 'lost') return acc;
-                 
+        const calculateProfitForPeriod = (startDate: Date) => {
+            const periodBets = bets.filter(bet => new Date(bet.date) >= startDate && (bet.status === 'won' || bet.status === 'lost'));
+            
+            return periodBets.reduce((acc, bet) => {
                  if (bet.type === 'single') {
                     const stake = bet.stake ?? 0;
                     const odds = bet.odds ?? 0;
                     if (bet.status === 'won') return acc + (stake * odds) - stake;
                     if (bet.status === 'lost') return acc - stake;
-                 } else if (bet.type === 'surebet') {
-                    // Assuming guaranteedProfit is the net profit for a won surebet
-                    if (bet.status === 'won') return acc + (bet.guaranteedProfit ?? 0);
-                    // A lost surebet would lose the total stake in this simplified model
-                    if (bet.status === 'lost') return acc - (bet.totalStake ?? 0);
+                 } else if (bet.type === 'surebet' && bet.status === 'won') {
+                    return acc + (bet.guaranteedProfit ?? 0);
+                 } else if (bet.type === 'surebet' && bet.status === 'lost') {
+                     return acc - (bet.totalStake ?? 0);
                  }
                  return acc;
             }, 0);
-            
-            return { totalStaked, netProfit };
         };
+        
+        const now = new Date();
+        const dailyProfit = calculateProfitForPeriod(startOfDay(now));
+        const weeklyProfit = calculateProfitForPeriod(startOfWeek(now, { weekStartsOn: 1 }));
+        const monthlyProfit = calculateProfitForPeriod(startOfMonth(now));
 
-        const finishedBetsCount = bets.filter(b => b.status === 'won' || b.status === 'lost').length;
-        const wonBetsCount = bets.filter(b => b.status === 'won').length;
-        const winRate = finishedBetsCount > 0 ? (wonBetsCount / finishedBetsCount) * 100 : 0;
+        const allTimeProfit = calculateProfitForPeriod(new Date(0)); // From the beginning of time
+        const currentBankroll = initialBankroll + allTimeProfit;
         
         return {
-            day: calculateStatsForPeriod('day'),
-            week: calculateStatsForPeriod('week'),
-            month: calculateStatsForPeriod('month'),
-            overallWinRate: winRate,
+            dailyProfit,
+            weeklyProfit,
+            monthlyProfit,
+            currentBankroll
         }
-    }, [bets]);
+    }, [bets, initialBankroll]);
 
      const filteredBets = useMemo(() => {
         const otherStatuses: Bet['status'][] = ['cashed_out', 'void'];
@@ -197,6 +185,68 @@ export default function BetsPage() {
                     </Button>
                 </div>
                 
+                 <div className="mb-8">
+                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-4 gap-4">
+                         <h3 className="text-2xl font-bold flex items-center gap-2">
+                            <Wallet className="w-7 h-7 text-primary" />
+                            Gestão de Banca
+                         </h3>
+                         <div className="flex items-center gap-4 w-full md:w-auto">
+                             <div className='flex-1'>
+                                <Label htmlFor="bankroll" className="text-sm font-medium">Banca Inicial</Label>
+                                <div className="relative">
+                                    <Landmark className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                    <Input
+                                        id="bankroll"
+                                        type="number"
+                                        step="10"
+                                        value={initialBankroll}
+                                        onChange={(e) => setInitialBankroll(Number(e.target.value))}
+                                        className="pl-9 font-medium"
+                                    />
+                                </div>
+                            </div>
+                         </div>
+                    </div>
+                     {isLoading ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            {Array.from({ length: 4 }).map((_, i) => (
+                                <Skeleton key={i} className="h-[116px] w-full" />
+                            ))}
+                        </div>
+                     ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                             <SummaryCard
+                                title="Banca Atual"
+                                value={summaryStats.currentBankroll}
+                                icon={Landmark}
+                                isCurrency
+                            />
+                            <SummaryCard
+                                title="Lucro/Prejuízo (Dia)"
+                                value={summaryStats.dailyProfit}
+                                icon={summaryStats.dailyProfit >= 0 ? TrendingUp : TrendingDown}
+                                isCurrency
+                                valueClassName={summaryStats.dailyProfit >= 0 ? "text-green-500" : "text-destructive"}
+                            />
+                             <SummaryCard
+                                title="Lucro/Prejuízo (Semana)"
+                                value={summaryStats.weeklyProfit}
+                                icon={summaryStats.weeklyProfit >= 0 ? TrendingUp : TrendingDown}
+                                isCurrency
+                                valueClassName={summaryStats.weeklyProfit >= 0 ? "text-green-500" : "text-destructive"}
+                            />
+                              <SummaryCard
+                                title="Lucro/Prejuízo (Mês)"
+                                value={summaryStats.monthlyProfit}
+                                icon={summaryStats.monthlyProfit >= 0 ? TrendingUp : TrendingDown}
+                                isCurrency
+                                valueClassName={summaryStats.monthlyProfit >= 0 ? "text-green-500" : "text-destructive"}
+                            />
+                        </div>
+                     )}
+                </div>
+
                 <div className="mb-8">
                      <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">
                         <Calculator className="w-7 h-7 text-primary" />
@@ -216,57 +266,6 @@ export default function BetsPage() {
                             <AdvancedSurebetCalculator />
                         </TabsContent>
                     </Tabs>
-                </div>
-
-                 <div className="mb-8">
-                    <div className="flex items-center justify-between mb-4">
-                         <h3 className="text-2xl font-bold flex items-center gap-2">
-                            <Calendar className="w-7 h-7 text-primary" />
-                            Resumo por Período
-                         </h3>
-                         <div className="flex items-center gap-1 bg-muted p-1 rounded-lg">
-                            {(['day', 'week', 'month'] as Period[]).map(p => (
-                                <Button 
-                                    key={p}
-                                    variant={summaryPeriod === p ? "default" : "ghost"}
-                                    size="sm"
-                                    onClick={() => setSummaryPeriod(p)}
-                                    className={cn("capitalize", summaryPeriod === p && "shadow-md")}
-                                >
-                                    {p === 'day' ? 'Hoje' : p === 'week' ? 'Semana' : 'Mês'}
-                                </Button>
-                            ))}
-                         </div>
-                    </div>
-                     {isLoading ? (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {Array.from({ length: 3 }).map((_, i) => (
-                                <Skeleton key={i} className="h-[116px] w-full" />
-                            ))}
-                        </div>
-                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <SummaryCard
-                                title="Total Apostado"
-                                value={summaryStats[summaryPeriod].totalStaked}
-                                icon={Scale}
-                                isCurrency
-                            />
-                            <SummaryCard
-                                title="Lucro / Prejuízo"
-                                value={summaryStats[summaryPeriod].netProfit}
-                                icon={summaryStats[summaryPeriod].netProfit >= 0 ? TrendingUp : TrendingDown}
-                                isCurrency
-                                className={summaryStats[summaryPeriod].netProfit >= 0 ? "text-green-500" : "text-destructive"}
-                            />
-                             <SummaryCard
-                                title="Taxa de Vitória (Geral)"
-                                value={summaryStats.overallWinRate}
-                                icon={Target}
-                                isPercentage
-                            />
-                        </div>
-                     )}
                 </div>
 
                  <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">

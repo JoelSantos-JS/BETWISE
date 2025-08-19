@@ -9,9 +9,10 @@ type SummaryCardProps = {
     isCurrency?: boolean;
     isPercentage?: boolean;
     className?: string;
+    valueClassName?: string;
 }
 
-export function SummaryCard({ title, value, icon: Icon, isCurrency = false, isPercentage = false, className }: SummaryCardProps) {
+export function SummaryCard({ title, value, icon: Icon, isCurrency = false, isPercentage = false, className, valueClassName }: SummaryCardProps) {
     
     const formattedValue = isCurrency
     ? value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -26,7 +27,7 @@ export function SummaryCard({ title, value, icon: Icon, isCurrency = false, isPe
                 <Icon className={cn("h-4 w-4 text-muted-foreground", className)} />
             </CardHeader>
             <CardContent>
-                <div className={cn("text-2xl font-bold", className)}>
+                <div className={cn("text-2xl font-bold", valueClassName)}>
                     {formattedValue}
                 </div>
             </CardContent>
