@@ -27,28 +27,55 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SurebetCalculator } from '@/components/bets/surebet-calculator';
 import { AdvancedSurebetCalculator } from '@/components/bets/advanced-surebet-calculator';
 import { TradingCalculator } from '@/components/bets/trading-calculator';
-import { isToday, isThisWeek, isThisMonth, startOfDay, startOfWeek, startOfMonth } from 'date-fns';
+import { startOfDay, startOfWeek, startOfMonth } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { INITIAL_BETS } from '@/lib/data';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, doc, setDoc, deleteDoc, addDoc, Timestamp } from 'firebase/firestore';
 
 
 type Period = 'day' | 'week' | 'month';
 
 export default function BetsPage() {
-    const [bets, setBets] = useState<Bet[]>(INITIAL_BETS.map(b => ({...b, date: new Date(b.date)})));
-    const [isLoading, setIsLoading] = useState(false);
+    const [bets, setBets] = useState<Bet[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [betToEdit, setBetToEdit] = useState<Bet | null>(null);
     const [betToDelete, setBetToDelete] = useState<Bet | null>(null);
     const [filterStatus, setFilterStatus] = useState<string>("pending");
-    const [summaryPeriod, setSummaryPeriod] = useState<Period>('day');
     const [initialBankroll, setInitialBankroll] = useState<number>(5000);
     const { toast } = useToast();
 
-    // The logic to sync with Firestore would go here in a real app,
-    // but for now, we manage state locally.
+    useEffect(() => {
+        const fetchBets = async () => {
+            setIsLoading(true);
+            try {
+                const querySnapshot = await getDocs(collection(db, "bets"));
+                const betsData = querySnapshot.docs.map(doc => {
+                    const data = doc.data();
+                    return { 
+                        ...data, 
+                        id: doc.id,
+                        // Convert Firestore Timestamps to JS Date objects
+                        date: data.date instanceof Timestamp ? data.date.toDate() : new Date(data.date)
+                    } as Bet;
+                });
+                setBets(betsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+            } catch (error) {
+                console.error("Error fetching bets:", error);
+                toast({
+                    variant: 'destructive',
+                    title: 'Erro ao carregar apostas',
+                    description: 'Não foi possível buscar os dados do Firestore. Verifique suas regras de segurança e a conexão.'
+                });
+            } finally {
+                setIsLoading(false);
+            }
+        }
+        fetchBets();
+    }, [toast]);
+
 
     const summaryStats = useMemo(() => {
         const calculateProfitForPeriod = (startDate: Date) => {
@@ -100,31 +127,51 @@ export default function BetsPage() {
         setIsFormOpen(true);
     }
 
-    const handleSaveBet = (betData: Omit<Bet, 'id'>) => {
-        const sanitizedBetData = JSON.parse(JSON.stringify(betData));
-    
-        if (betToEdit) {
-            setBets(bets.map(b => (b.id === betToEdit.id ? { ...b, ...sanitizedBetData, id: b.id, date: new Date(sanitizedBetData.date) } : b)));
-            toast({ title: "Aposta Atualizada!", description: `A aposta no evento "${betData.event}" foi atualizada.` });
-        } else {
-            const newBet: Bet = {
-                id: new Date().getTime().toString(),
-                ...sanitizedBetData,
-                date: new Date(sanitizedBetData.date),
-            };
-            setBets([newBet, ...bets]);
-            toast({ title: "Aposta Adicionada!", description: `Sua aposta em "${betData.event}" foi registrada.` });
+    const handleSaveBet = async (betData: Omit<Bet, 'id'>) => {
+        const isEditing = !!betToEdit;
+        const betToSave = {
+            ...betData,
+            date: Timestamp.fromDate(new Date(betData.date)) // Convert Date to Firestore Timestamp
+        };
+
+        try {
+            if (isEditing) {
+                const betDocRef = doc(db, 'bets', betToEdit.id);
+                await setDoc(betDocRef, betToSave);
+                setBets(bets.map(b => (b.id === betToEdit.id ? { ...betToSave, id: b.id, date: new Date(betData.date) } as Bet : b)));
+                toast({ title: "Aposta Atualizada!", description: `A aposta no evento "${betData.event}" foi atualizada.` });
+            } else {
+                const newDocRef = await addDoc(collection(db, 'bets'), betToSave);
+                const newBet: Bet = {
+                    ...betToSave,
+                    id: newDocRef.id,
+                    date: new Date(betData.date),
+                };
+                setBets([newBet, ...bets]);
+                toast({ title: "Aposta Adicionada!", description: `Sua aposta em "${betData.event}" foi registrada.` });
+            }
+        } catch (error) {
+            console.error("Error saving bet:", error);
+            toast({ variant: 'destructive', title: 'Erro ao salvar', description: 'Não foi possível salvar a aposta no banco de dados.' });
+        } finally {
+            setIsFormOpen(false);
+            setBetToEdit(null);
         }
-        setIsFormOpen(false);
-        setBetToEdit(null);
     };
 
-    const handleDeleteBet = (betId: string) => {
+    const handleDeleteBet = async (betId: string) => {
         const bet = bets.find(b => b.id === betId);
         if (!bet) return;
-        setBets(bets.filter(b => b.id !== betId));
-        setBetToDelete(null);
-        toast({ variant: 'destructive', title: "Aposta Excluída!", description: `A aposta em "${bet.event}" foi removida.` });
+        
+        try {
+            await deleteDoc(doc(db, "bets", betId));
+            setBets(bets.filter(b => b.id !== betId));
+            setBetToDelete(null);
+            toast({ variant: 'destructive', title: "Aposta Excluída!", description: `A aposta em "${bet.event}" foi removida.` });
+        } catch (error) {
+             console.error("Error deleting bet:", error);
+             toast({ variant: 'destructive', title: 'Erro ao excluir', description: 'Não foi possível remover a aposta do banco de dados.' });
+        }
     }
 
     const renderBetList = () => {
