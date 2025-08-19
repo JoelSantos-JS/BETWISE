@@ -17,6 +17,10 @@ import { Loader2, ShieldCheck } from 'lucide-react';
 const formSchema = z.object({
   email: z.string().email({ message: 'Por favor, insira um email válido.' }),
   password: z.string().min(6, { message: 'A senha deve ter pelo menos 6 caracteres.' }),
+  confirmPassword: z.string()
+}).refine(data => data.password === data.confirmPassword, {
+    message: "As senhas não coincidem.",
+    path: ["confirmPassword"],
 });
 
 export default function SignUpPage() {
@@ -30,6 +34,7 @@ export default function SignUpPage() {
     defaultValues: {
       email: '',
       password: '',
+      confirmPassword: '',
     },
   });
 
@@ -109,6 +114,19 @@ export default function SignUpPage() {
                             <FormLabel>Senha</FormLabel>
                             <FormControl>
                             <Input type="password" placeholder="Mínimo 6 caracteres" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                        )}
+                    />
+                     <FormField
+                        control={form.control}
+                        name="confirmPassword"
+                        render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Confirmar Senha</FormLabel>
+                            <FormControl>
+                            <Input type="password" placeholder="Confirme sua senha" {...field} />
                             </FormControl>
                             <FormMessage />
                         </FormItem>
