@@ -23,24 +23,19 @@ import { BetForm } from '@/components/bets/bet-form';
 import { SummaryCard } from '@/components/dashboard/summary-card';
 import { BetPerformanceChart } from '@/components/bets/bet-performance-chart';
 import { BetStatusChart } from '@/components/bets/bet-status-chart';
-import { useAuth } from '@/hooks/use-auth';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SurebetCalculator } from '@/components/bets/surebet-calculator';
 import { AdvancedSurebetCalculator } from '@/components/bets/advanced-surebet-calculator';
 import { isToday, isThisWeek, isThisMonth } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { INITIAL_BETS } from '@/lib/data';
 
-
-const initialBets: Bet[] = [];
 
 type Period = 'day' | 'week' | 'month';
 
 export default function BetsPage() {
-    const { user, loading: authLoading } = useAuth();
-    const [bets, setBets] = useState<Bet[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const [bets, setBets] = useState<Bet[]>(INITIAL_BETS.map(b => ({...b, date: new Date(b.date)})));
+    const [isLoading, setIsLoading] = useState(false); // Set to false initially
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [betToEdit, setBetToEdit] = useState<Bet | null>(null);
     const [betToDelete, setBetToDelete] = useState<Bet | null>(null);
@@ -48,47 +43,8 @@ export default function BetsPage() {
     const [summaryPeriod, setSummaryPeriod] = useState<Period>('day');
     const { toast } = useToast();
 
-     useEffect(() => {
-        if (authLoading || !user) return;
-
-        const fetchData = async () => {
-            setIsLoading(true);
-            const docRef = doc(db, "user-data", user.uid);
-            const docSnap = await getDoc(docRef);
-
-            if (docSnap.exists() && docSnap.data().bets) {
-                const data = docSnap.data().bets;
-                 const parsedBets = data.map((b: any) => ({...b, date: b.date?.toDate ? b.date.toDate() : new Date(b.date)}));
-                setBets(parsedBets);
-            } else {
-                setBets(initialBets);
-            }
-            setIsLoading(false);
-        }
-        fetchData();
-    }, [user, authLoading]);
-
-    useEffect(() => {
-        if (authLoading || isLoading || !user) return;
-
-        const saveData = async () => {
-            try {
-                const docRef = doc(db, "user-data", user.uid);
-                // Sanitize data before saving to remove any undefined fields
-                 const sanitizedBets = JSON.parse(JSON.stringify(bets));
-                await setDoc(docRef, { bets: sanitizedBets }, { merge: true });
-            } catch (error) {
-                console.error("Failed to save bets to Firestore", error);
-                toast({
-                    variant: 'destructive',
-                    title: "Erro ao Salvar Dados",
-                    description: "Não foi possível salvar as apostas na nuvem.",
-                })
-            }
-        }
-        saveData();
-    }, [bets, user, authLoading, isLoading, toast]);
-
+    // The logic to sync with Firestore would go here in a real app,
+    // but for now, we manage state locally.
 
     const summaryStats = useMemo(() => {
         const calculateStatsForPeriod = (period: Period) => {
@@ -117,7 +73,9 @@ export default function BetsPage() {
                     if (bet.status === 'won') return acc + (stake * odds) - stake;
                     if (bet.status === 'lost') return acc - stake;
                  } else if (bet.type === 'surebet') {
+                    // Assuming guaranteedProfit is the net profit for a won surebet
                     if (bet.status === 'won') return acc + (bet.guaranteedProfit ?? 0);
+                    // A lost surebet would lose the total stake in this simplified model
                     if (bet.status === 'lost') return acc - (bet.totalStake ?? 0);
                  }
                  return acc;
@@ -157,12 +115,13 @@ export default function BetsPage() {
         const sanitizedBetData = JSON.parse(JSON.stringify(betData));
     
         if (betToEdit) {
-            setBets(bets.map(b => (b.id === betToEdit.id ? { ...b, ...sanitizedBetData, id: b.id } : b)));
+            setBets(bets.map(b => (b.id === betToEdit.id ? { ...b, ...sanitizedBetData, id: b.id, date: new Date(sanitizedBetData.date) } : b)));
             toast({ title: "Aposta Atualizada!", description: `A aposta no evento "${betData.event}" foi atualizada.` });
         } else {
             const newBet: Bet = {
                 id: new Date().getTime().toString(),
                 ...sanitizedBetData,
+                date: new Date(sanitizedBetData.date),
             };
             setBets([newBet, ...bets]);
             toast({ title: "Aposta Adicionada!", description: `Sua aposta em "${betData.event}" foi registrada.` });
