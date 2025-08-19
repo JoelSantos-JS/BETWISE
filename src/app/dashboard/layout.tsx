@@ -21,8 +21,7 @@ export default function DashboardLayout({
                 </svg>
                 <h1 className="text-2xl font-bold tracking-tight">BetWise</h1>
             </Link>
-            <MainNav className="mx-6" />
-            <div className="ml-auto flex items-center space-x-4">
+             <div className="ml-auto flex items-center space-x-4">
                 <UserNav />
             </div>
             </div>

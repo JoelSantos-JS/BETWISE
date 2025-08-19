@@ -34,10 +34,13 @@ import { Label } from '@/components/ui/label';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc, addDoc, Timestamp, getDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/auth-context';
+import { MainNav } from '@/components/main-nav';
+import { useRouter } from 'next/navigation';
 
 
 export default function BetsPage() {
     const { user, loading: authLoading } = useAuth();
+    const router = useRouter();
     const [bets, setBets] = useState<Bet[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isFormOpen, setIsFormOpen] = useState(false);
@@ -90,8 +93,9 @@ export default function BetsPage() {
             fetchUserData(user.uid);
         } else if (!authLoading) {
             setIsLoading(false);
+            router.replace('/login');
         }
-    }, [user, authLoading, fetchUserData]);
+    }, [user, authLoading, fetchUserData, router]);
 
     const handleSaveBankroll = async () => {
         if (!user) {
@@ -220,25 +224,22 @@ export default function BetsPage() {
 
     if (authLoading || isLoading) {
          return (
-            <div className="flex items-center justify-center h-full">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                    <Skeleton key={i} className="h-[250px] w-full" />
-                    ))}
+            <div className="w-screen h-screen flex items-center justify-center">
+                <div className="space-y-4 w-1/2">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-32 w-full" />
+                    <Skeleton className="h-8 w-1/2" />
                 </div>
             </div>
          )
     }
 
     if (!user) {
+        // This view is protected, and the useEffect should redirect.
+        // Return a loader to prevent a flash of content.
         return (
-             <div className="text-center py-20 bg-muted rounded-lg">
-                <h3 className="text-2xl font-bold">Bem-vindo ao BetWise</h3>
-                <p className="text-muted-foreground mt-2 mb-6">Por favor, faça login ou cadastre-se para gerenciar suas apostas.</p>
-                <div className="flex gap-4 justify-center">
-                    <Button size="lg" asChild><a href="/login">Login</a></Button>
-                    <Button size="lg" variant="outline" asChild><a href="/signup">Cadastrar</a></Button>
-                </div>
+            <div className="w-screen h-screen flex items-center justify-center">
+                 <Skeleton className="h-48 w-full max-w-lg" />
             </div>
         )
     }
@@ -275,134 +276,134 @@ export default function BetsPage() {
     return (
         <>
         <div className="flex flex-col min-h-screen">
-            <Header />
-            <main className="flex-1 container mx-auto px-4 py-8">
-                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-                    <div className="max-w-2xl">
-                        <h2 className="text-3xl font-bold mb-1 flex items-center gap-2">
-                        <BarChart className="w-8 h-8 text-primary" />
-                        Dashboard de Apostas
-                        </h2>
-                        <p className="text-muted-foreground">
-                            Gerencie suas apostas, analise riscos e acompanhe seus resultados.
-                        </p>
-                    </div>
+             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                <div className="max-w-2xl">
+                    <h2 className="text-3xl font-bold mb-1 flex items-center gap-2">
+                    <BarChart className="w-8 h-8 text-primary" />
+                    Dashboard de Apostas
+                    </h2>
+                    <p className="text-muted-foreground">
+                        Gerencie suas apostas, analise riscos e acompanhe seus resultados.
+                    </p>
+                </div>
+                <div className='flex items-center gap-4'>
+                    <MainNav />
                     <Button size="lg" onClick={() => handleOpenForm()} className="w-full md:w-auto">
                         <PlusCircle className="mr-2"/>
                         Adicionar Aposta
                     </Button>
                 </div>
-                
-                 <div className="mb-8">
-                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-4 gap-4">
-                         <h3 className="text-2xl font-bold flex items-center gap-2">
-                            <Wallet className="w-7 h-7 text-primary" />
-                            Gestão de Banca
-                         </h3>
-                         <div className="flex items-center gap-2 w-full md:w-auto">
-                             <div className='flex-1'>
-                                <Label htmlFor="bankroll" className="text-sm font-medium">Banca Inicial</Label>
-                                <div className="relative">
-                                    <Landmark className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                    <Input
-                                        id="bankroll"
-                                        type="number"
-                                        step="10"
-                                        value={bankrollInput}
-                                        onChange={(e) => setBankrollInput(e.target.value)}
-                                        className="pl-9 font-medium"
-                                    />
-                                </div>
-                            </div>
-                            <Button onClick={handleSaveBankroll} className="self-end">
-                                <Save className="mr-2 h-4 w-4"/>
-                                Salvar
-                            </Button>
-                         </div>
-                    </div>
-                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                         <SummaryCard
-                            title="Banca Atual"
-                            value={summaryStats.currentBankroll}
-                            icon={Landmark}
-                            isCurrency
-                        />
-                        <SummaryCard
-                            title="Lucro/Prejuízo (Dia)"
-                            value={summaryStats.dailyProfit}
-                            icon={summaryStats.dailyProfit >= 0 ? TrendingUp : TrendingDown}
-                            isCurrency
-                            valueClassName={summaryStats.dailyProfit >= 0 ? "text-green-500" : "text-destructive"}
-                        />
-                         <SummaryCard
-                            title="Lucro/Prejuízo (Semana)"
-                            value={summaryStats.weeklyProfit}
-                            icon={summaryStats.weeklyProfit >= 0 ? TrendingUp : TrendingDown}
-                            isCurrency
-                            valueClassName={summaryStats.weeklyProfit >= 0 ? "text-green-500" : "text-destructive"}
-                        />
-                          <SummaryCard
-                            title="Lucro/Prejuízo (Mês)"
-                            value={summaryStats.monthlyProfit}
-                            icon={summaryStats.monthlyProfit >= 0 ? TrendingUp : TrendingDown}
-                            isCurrency
-                            valueClassName={summaryStats.monthlyProfit >= 0 ? "text-green-500" : "text-destructive"}
-                        />
-                    </div>
-                </div>
-
-                <div className="mb-8">
-                     <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">
-                        <Calculator className="w-7 h-7 text-primary" />
-                        Calculadoras
+            </div>
+            
+             <div className="mb-8">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-4 gap-4">
+                     <h3 className="text-2xl font-bold flex items-center gap-2">
+                        <Wallet className="w-7 h-7 text-primary" />
+                        Gestão de Banca
                      </h3>
-                    <Tabs defaultValue="simple" className="w-full">
-                        <TabsList className="grid w-full grid-cols-3 mb-6">
-                            <TabsTrigger value="simple">Surebet Simples</TabsTrigger>
-                            <TabsTrigger value="trading">Trading (Back/Lay)</TabsTrigger>
-                            <TabsTrigger value="advanced">Surebet Avançada</TabsTrigger>
-                        </TabsList>
-                        
-                        <TabsContent value="simple">
-                            <SurebetCalculator />
-                        </TabsContent>
-
-                         <TabsContent value="trading">
-                            <TradingCalculator />
-                        </TabsContent>
-                        
-                        <TabsContent value="advanced">
-                            <AdvancedSurebetCalculator />
-                        </TabsContent>
-                    </Tabs>
+                     <div className="flex items-center gap-2 w-full md:w-auto">
+                         <div className='flex-1'>
+                            <Label htmlFor="bankroll" className="text-sm font-medium">Banca Inicial</Label>
+                            <div className="relative">
+                                <Landmark className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                                <Input
+                                    id="bankroll"
+                                    type="number"
+                                    step="10"
+                                    value={bankrollInput}
+                                    onChange={(e) => setBankrollInput(e.target.value)}
+                                    className="pl-9 font-medium"
+                                />
+                            </div>
+                        </div>
+                        <Button onClick={handleSaveBankroll} className="self-end">
+                            <Save className="mr-2 h-4 w-4"/>
+                            Salvar
+                        </Button>
+                     </div>
                 </div>
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                     <SummaryCard
+                        title="Banca Atual"
+                        value={summaryStats.currentBankroll}
+                        icon={Landmark}
+                        isCurrency
+                    />
+                    <SummaryCard
+                        title="Lucro/Prejuízo (Dia)"
+                        value={summaryStats.dailyProfit}
+                        icon={summaryStats.dailyProfit >= 0 ? TrendingUp : TrendingDown}
+                        isCurrency
+                        valueClassName={summaryStats.dailyProfit >= 0 ? "text-green-500" : "text-destructive"}
+                    />
+                     <SummaryCard
+                        title="Lucro/Prejuízo (Semana)"
+                        value={summaryStats.weeklyProfit}
+                        icon={summaryStats.weeklyProfit >= 0 ? TrendingUp : TrendingDown}
+                        isCurrency
+                        valueClassName={summaryStats.weeklyProfit >= 0 ? "text-green-500" : "text-destructive"}
+                    />
+                      <SummaryCard
+                        title="Lucro/Prejuízo (Mês)"
+                        value={summaryStats.monthlyProfit}
+                        icon={summaryStats.monthlyProfit >= 0 ? TrendingUp : TrendingDown}
+                        isCurrency
+                        valueClassName={summaryStats.monthlyProfit >= 0 ? "text-green-500" : "text-destructive"}
+                    />
+                </div>
+            </div>
 
-                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
-                    <div className="lg:col-span-3 h-[360px]">
-                        <BetPerformanceChart data={bets} isLoading={isLoading}/>
-                    </div>
-                    <div className="lg:col-span-2 h-[360px]">
-                        <BetStatusChart data={bets} isLoading={isLoading}/>
-                    </div>
-                 </div>
-                 
-                 <h3 className="text-2xl font-bold mb-4">Minhas Apostas</h3>
-                <Tabs defaultValue="pending" onValueChange={setFilterStatus} className="w-full">
-                    <TabsList className="grid w-full grid-cols-5 mb-6">
-                        <TabsTrigger value="all">Todas</TabsTrigger>
-                        <TabsTrigger value="pending">Em Andamento</TabsTrigger>
-                        <TabsTrigger value="won">Ganhos</TabsTrigger>
-                        <TabsTrigger value="lost">Perdidas</TabsTrigger>
-                        <TabsTrigger value="other">Outras</TabsTrigger>
+            <div className="mb-8">
+                 <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">
+                    <Calculator className="w-7 h-7 text-primary" />
+                    Calculadoras
+                 </h3>
+                <Tabs defaultValue="simple" className="w-full">
+                    <TabsList className="grid w-full grid-cols-3 mb-6">
+                        <TabsTrigger value="simple">Surebet Simples</TabsTrigger>
+                        <TabsTrigger value="trading">Trading (Back/Lay)</TabsTrigger>
+                        <TabsTrigger value="advanced">Surebet Avançada</TabsTrigger>
                     </TabsList>
                     
-                    <TabsContent value="all">{renderBetList()}</TabsContent>
-                    <TabsContent value="pending">{renderBetList()}</TabsContent>
-                    <TabsContent value="won">{renderBetList()}</TabsContent>
-                    <TabsContent value="lost">{renderBetList()}</TabsContent>
-                    <TabsContent value="other">{renderBetList()}</TabsContent>
+                    <TabsContent value="simple">
+                        <SurebetCalculator />
+                    </TabsContent>
+
+                     <TabsContent value="trading">
+                        <TradingCalculator />
+                    </TabsContent>
+                    
+                    <TabsContent value="advanced">
+                        <AdvancedSurebetCalculator />
+                    </TabsContent>
                 </Tabs>
-            </main>
+            </div>
+
+             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
+                <div className="lg:col-span-3 h-[360px]">
+                    <BetPerformanceChart data={bets} isLoading={isLoading}/>
+                </div>
+                <div className="lg:col-span-2 h-[360px]">
+                    <BetStatusChart data={bets} isLoading={isLoading}/>
+                </div>
+             </div>
+             
+             <h3 className="text-2xl font-bold mb-4">Minhas Apostas</h3>
+            <Tabs defaultValue="pending" onValueChange={setFilterStatus} className="w-full">
+                <TabsList className="grid w-full grid-cols-5 mb-6">
+                    <TabsTrigger value="all">Todas</TabsTrigger>
+                    <TabsTrigger value="pending">Em Andamento</TabsTrigger>
+                    <TabsTrigger value="won">Ganhos</TabsTrigger>
+                    <TabsTrigger value="lost">Perdidas</TabsTrigger>
+                    <TabsTrigger value="other">Outras</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="all">{renderBetList()}</TabsContent>
+                <TabsContent value="pending">{renderBetList()}</TabsContent>
+                <TabsContent value="won">{renderBetList()}</TabsContent>
+                <TabsContent value="lost">{renderBetList()}</TabsContent>
+                <TabsContent value="other">{renderBetList()}</TabsContent>
+            </Tabs>
         </div>
 
         <Dialog open={isFormOpen} onOpenChange={isOpen => {
