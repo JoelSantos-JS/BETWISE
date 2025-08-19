@@ -2,6 +2,7 @@ import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
 import { BackgroundFlames } from '@/components/background-flames';
+import { AuthProvider } from '@/context/auth-context';
 
 export const metadata: Metadata = {
   title: 'BetWise Dashboard',
@@ -30,7 +31,9 @@ export default function RootLayout({
         <BackgroundFlames />
         <div className="vignette"></div>
         <div style={{position: 'relative', zIndex: 1, height: '100vh', overflowY: 'auto'}}>
-            {children}
+            <AuthProvider>
+              {children}
+            </AuthProvider>
         </div>
         <Toaster />
       </body>

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Bet } from '@/lib/types';
 import { Header } from "@/components/layout/header";
 import { Button } from '@/components/ui/button';
-import { PlusCircle, BarChart, AlertTriangle, Calendar, TrendingUp, TrendingDown, Calculator, Scale, Target, Landmark, Wallet } from 'lucide-react';
+import { PlusCircle, BarChart, AlertTriangle, Save, TrendingUp, TrendingDown, Calculator, Wallet, Landmark } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BetCard } from '@/components/bets/bet-card';
@@ -32,12 +32,12 @@ import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc, addDoc, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, addDoc, Timestamp, getDoc } from 'firebase/firestore';
+import { useAuth } from '@/context/auth-context';
 
-
-type Period = 'day' | 'week' | 'month';
 
 export default function BetsPage() {
+    const { user, loading: authLoading } = useAuth();
     const [bets, setBets] = useState<Bet[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isFormOpen, setIsFormOpen] = useState(false);
@@ -45,36 +45,75 @@ export default function BetsPage() {
     const [betToDelete, setBetToDelete] = useState<Bet | null>(null);
     const [filterStatus, setFilterStatus] = useState<string>("pending");
     const [initialBankroll, setInitialBankroll] = useState<number>(5000);
+    const [bankrollInput, setBankrollInput] = useState<string>("5000");
+
     const { toast } = useToast();
 
-    useEffect(() => {
-        const fetchBets = async () => {
-            setIsLoading(true);
-            try {
-                const querySnapshot = await getDocs(collection(db, "bets"));
-                const betsData = querySnapshot.docs.map(doc => {
-                    const data = doc.data();
-                    return { 
-                        ...data, 
-                        id: doc.id,
-                        // Convert Firestore Timestamps to JS Date objects
-                        date: data.date instanceof Timestamp ? data.date.toDate() : new Date(data.date)
-                    } as Bet;
-                });
-                setBets(betsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-            } catch (error) {
-                console.error("Error fetching bets:", error);
-                toast({
-                    variant: 'destructive',
-                    title: 'Erro ao carregar apostas',
-                    description: 'Não foi possível buscar os dados do Firestore. Verifique suas regras de segurança e a conexão.'
-                });
-            } finally {
-                setIsLoading(false);
+    const fetchUserData = useCallback(async (userId: string) => {
+        setIsLoading(true);
+        try {
+            // Fetch user profile for bankroll
+            const userDocRef = doc(db, 'users', userId);
+            const userDoc = await getDoc(userDocRef);
+            if (userDoc.exists()) {
+                const userData = userDoc.data();
+                setInitialBankroll(userData.initialBankroll || 5000);
+                setBankrollInput(String(userData.initialBankroll || 5000));
             }
+
+            // Fetch bets
+            const betsCollectionRef = collection(db, 'users', userId, 'bets');
+            const querySnapshot = await getDocs(betsCollectionRef);
+            const betsData = querySnapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    ...data,
+                    id: doc.id,
+                    date: data.date instanceof Timestamp ? data.date.toDate() : new Date(data.date)
+                } as Bet;
+            });
+            setBets(betsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+        } catch (error) {
+            console.error("Error fetching user data:", error);
+            toast({
+                variant: 'destructive',
+                title: 'Erro ao carregar dados',
+                description: 'Não foi possível buscar seus dados do Firestore.'
+            });
+        } finally {
+            setIsLoading(false);
         }
-        fetchBets();
     }, [toast]);
+
+    useEffect(() => {
+        if (user) {
+            fetchUserData(user.uid);
+        } else if (!authLoading) {
+            setIsLoading(false);
+        }
+    }, [user, authLoading, fetchUserData]);
+
+    const handleSaveBankroll = async () => {
+        if (!user) {
+            toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado para salvar.' });
+            return;
+        }
+        const newBankroll = Number(bankrollInput);
+        if (isNaN(newBankroll) || newBankroll < 0) {
+            toast({ variant: 'destructive', title: 'Valor Inválido', description: 'Por favor, insira um valor numérico positivo para a banca.' });
+            return;
+        }
+
+        try {
+            const userDocRef = doc(db, 'users', user.uid);
+            await setDoc(userDocRef, { initialBankroll: newBankroll }, { merge: true });
+            setInitialBankroll(newBankroll);
+            toast({ title: 'Banca Salva!', description: 'Sua banca inicial foi atualizada com sucesso.' });
+        } catch (error) {
+            console.error("Error saving bankroll:", error);
+            toast({ variant: 'destructive', title: 'Erro ao Salvar', description: 'Não foi possível atualizar sua banca.' });
+        }
+    };
 
 
     const summaryStats = useMemo(() => {
@@ -101,7 +140,7 @@ export default function BetsPage() {
         const weeklyProfit = calculateProfitForPeriod(startOfWeek(now, { weekStartsOn: 1 }));
         const monthlyProfit = calculateProfitForPeriod(startOfMonth(now));
 
-        const allTimeProfit = calculateProfitForPeriod(new Date(0)); // From the beginning of time
+        const allTimeProfit = calculateProfitForPeriod(new Date(0));
         const currentBankroll = initialBankroll + allTimeProfit;
         
         return {
@@ -128,26 +167,27 @@ export default function BetsPage() {
     }
 
     const handleSaveBet = async (betData: Omit<Bet, 'id'>) => {
+         if (!user) {
+            toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado.' });
+            return;
+        }
         const isEditing = !!betToEdit;
         const betToSave = {
             ...betData,
-            date: Timestamp.fromDate(new Date(betData.date)) // Convert Date to Firestore Timestamp
+            date: Timestamp.fromDate(new Date(betData.date))
         };
+        
+        const betsCollectionRef = collection(db, 'users', user.uid, 'bets');
 
         try {
             if (isEditing) {
-                const betDocRef = doc(db, 'bets', betToEdit.id);
+                const betDocRef = doc(betsCollectionRef, betToEdit.id);
                 await setDoc(betDocRef, betToSave);
                 setBets(bets.map(b => (b.id === betToEdit.id ? { ...betToSave, id: b.id, date: new Date(betData.date) } as Bet : b)));
                 toast({ title: "Aposta Atualizada!", description: `A aposta no evento "${betData.event}" foi atualizada.` });
             } else {
-                const newDocRef = await addDoc(collection(db, 'bets'), betToSave);
-                const newBet: Bet = {
-                    ...betToSave,
-                    id: newDocRef.id,
-                    date: new Date(betData.date),
-                };
-                setBets([newBet, ...bets]);
+                const newDocRef = await addDoc(betsCollectionRef, betToSave);
+                setBets(prev => [{...betData, id: newDocRef.id }, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
                 toast({ title: "Aposta Adicionada!", description: `Sua aposta em "${betData.event}" foi registrada.` });
             }
         } catch (error) {
@@ -160,11 +200,15 @@ export default function BetsPage() {
     };
 
     const handleDeleteBet = async (betId: string) => {
+        if (!user) {
+            toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado.' });
+            return;
+        }
         const bet = bets.find(b => b.id === betId);
         if (!bet) return;
         
         try {
-            await deleteDoc(doc(db, "bets", betId));
+            await deleteDoc(doc(db, "users", user.uid, "bets", betId));
             setBets(bets.filter(b => b.id !== betId));
             setBetToDelete(null);
             toast({ variant: 'destructive', title: "Aposta Excluída!", description: `A aposta em "${bet.event}" foi removida.` });
@@ -174,17 +218,33 @@ export default function BetsPage() {
         }
     }
 
-    const renderBetList = () => {
-        if (isLoading) {
-             return (
+    if (authLoading || isLoading) {
+         return (
+            <div className="flex items-center justify-center h-full">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {Array.from({ length: 6 }).map((_, i) => (
                     <Skeleton key={i} className="h-[250px] w-full" />
                     ))}
                 </div>
-            )
-        }
-        
+            </div>
+         )
+    }
+
+    if (!user) {
+        return (
+             <div className="text-center py-20 bg-muted rounded-lg">
+                <h3 className="text-2xl font-bold">Bem-vindo ao BetWise</h3>
+                <p className="text-muted-foreground mt-2 mb-6">Por favor, faça login ou cadastre-se para gerenciar suas apostas.</p>
+                <div className="flex gap-4 justify-center">
+                    <Button size="lg" asChild><a href="/login">Login</a></Button>
+                    <Button size="lg" variant="outline" asChild><a href="/signup">Cadastrar</a></Button>
+                </div>
+            </div>
+        )
+    }
+
+
+    const renderBetList = () => {
         if (filteredBets.length > 0) {
             return (
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -239,7 +299,7 @@ export default function BetsPage() {
                             <Wallet className="w-7 h-7 text-primary" />
                             Gestão de Banca
                          </h3>
-                         <div className="flex items-center gap-4 w-full md:w-auto">
+                         <div className="flex items-center gap-2 w-full md:w-auto">
                              <div className='flex-1'>
                                 <Label htmlFor="bankroll" className="text-sm font-medium">Banca Inicial</Label>
                                 <div className="relative">
@@ -248,51 +308,47 @@ export default function BetsPage() {
                                         id="bankroll"
                                         type="number"
                                         step="10"
-                                        value={initialBankroll}
-                                        onChange={(e) => setInitialBankroll(Number(e.target.value))}
+                                        value={bankrollInput}
+                                        onChange={(e) => setBankrollInput(e.target.value)}
                                         className="pl-9 font-medium"
                                     />
                                 </div>
                             </div>
+                            <Button onClick={handleSaveBankroll} className="self-end">
+                                <Save className="mr-2 h-4 w-4"/>
+                                Salvar
+                            </Button>
                          </div>
                     </div>
-                     {isLoading ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                            {Array.from({ length: 4 }).map((_, i) => (
-                                <Skeleton key={i} className="h-[116px] w-full" />
-                            ))}
-                        </div>
-                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                             <SummaryCard
-                                title="Banca Atual"
-                                value={summaryStats.currentBankroll}
-                                icon={Landmark}
-                                isCurrency
-                            />
-                            <SummaryCard
-                                title="Lucro/Prejuízo (Dia)"
-                                value={summaryStats.dailyProfit}
-                                icon={summaryStats.dailyProfit >= 0 ? TrendingUp : TrendingDown}
-                                isCurrency
-                                valueClassName={summaryStats.dailyProfit >= 0 ? "text-green-500" : "text-destructive"}
-                            />
-                             <SummaryCard
-                                title="Lucro/Prejuízo (Semana)"
-                                value={summaryStats.weeklyProfit}
-                                icon={summaryStats.weeklyProfit >= 0 ? TrendingUp : TrendingDown}
-                                isCurrency
-                                valueClassName={summaryStats.weeklyProfit >= 0 ? "text-green-500" : "text-destructive"}
-                            />
-                              <SummaryCard
-                                title="Lucro/Prejuízo (Mês)"
-                                value={summaryStats.monthlyProfit}
-                                icon={summaryStats.monthlyProfit >= 0 ? TrendingUp : TrendingDown}
-                                isCurrency
-                                valueClassName={summaryStats.monthlyProfit >= 0 ? "text-green-500" : "text-destructive"}
-                            />
-                        </div>
-                     )}
+                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                         <SummaryCard
+                            title="Banca Atual"
+                            value={summaryStats.currentBankroll}
+                            icon={Landmark}
+                            isCurrency
+                        />
+                        <SummaryCard
+                            title="Lucro/Prejuízo (Dia)"
+                            value={summaryStats.dailyProfit}
+                            icon={summaryStats.dailyProfit >= 0 ? TrendingUp : TrendingDown}
+                            isCurrency
+                            valueClassName={summaryStats.dailyProfit >= 0 ? "text-green-500" : "text-destructive"}
+                        />
+                         <SummaryCard
+                            title="Lucro/Prejuízo (Semana)"
+                            value={summaryStats.weeklyProfit}
+                            icon={summaryStats.weeklyProfit >= 0 ? TrendingUp : TrendingDown}
+                            isCurrency
+                            valueClassName={summaryStats.weeklyProfit >= 0 ? "text-green-500" : "text-destructive"}
+                        />
+                          <SummaryCard
+                            title="Lucro/Prejuízo (Mês)"
+                            value={summaryStats.monthlyProfit}
+                            icon={summaryStats.monthlyProfit >= 0 ? TrendingUp : TrendingDown}
+                            isCurrency
+                            valueClassName={summaryStats.monthlyProfit >= 0 ? "text-green-500" : "text-destructive"}
+                        />
+                    </div>
                 </div>
 
                 <div className="mb-8">
