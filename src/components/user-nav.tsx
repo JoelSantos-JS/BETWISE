@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/context/auth-context";
 import { useRouter } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { LogOut, Shield } from "lucide-react";
 
 
 export function UserNav() {
@@ -38,6 +38,8 @@ export function UserNav() {
     );
   }
 
+  const isGodMode = user.email === "joeltere9@gmail.com";
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -55,6 +57,11 @@ export function UserNav() {
             <p className="text-xs leading-none text-muted-foreground">
               {user.email}
             </p>
+             {isGodMode && (
+              <p className="text-xs leading-none text-primary font-bold flex items-center gap-1 pt-1">
+                <Shield className="w-3 h-3"/> GOD MODE
+              </p>
+            )}
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
