@@ -1,0 +1,12 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow users to read and write their own data.
+    // This rule ensures that a user can only access documents under their own user ID path.
+    match /users/{userId}/{documents=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

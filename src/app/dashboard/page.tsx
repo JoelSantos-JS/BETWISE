@@ -1,8 +1,8 @@
+
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Bet } from '@/lib/types';
-import { Header } from "@/components/layout/header";
 import { Button } from '@/components/ui/button';
 import { PlusCircle, BarChart, AlertTriangle, Save, TrendingUp, TrendingDown, Calculator, Wallet, Landmark } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -28,7 +28,6 @@ import { SurebetCalculator } from '@/components/bets/surebet-calculator';
 import { AdvancedSurebetCalculator } from '@/components/bets/advanced-surebet-calculator';
 import { TradingCalculator } from '@/components/bets/trading-calculator';
 import { startOfDay, startOfWeek, startOfMonth } from 'date-fns';
-import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { db } from '@/lib/firebase';
@@ -36,6 +35,7 @@ import { collection, getDocs, doc, setDoc, deleteDoc, addDoc, Timestamp, getDoc 
 import { useAuth } from '@/context/auth-context';
 import { MainNav } from '@/components/main-nav';
 import { useRouter } from 'next/navigation';
+import { Card } from '@/components/ui/card';
 
 
 export default function BetsPage() {
@@ -235,13 +235,21 @@ export default function BetsPage() {
     }
 
     if (!user) {
-        // This view is protected, and the useEffect should redirect.
-        // Return a loader to prevent a flash of content.
         return (
-            <div className="w-screen h-screen flex items-center justify-center">
-                 <Skeleton className="h-48 w-full max-w-lg" />
-            </div>
-        )
+          <div className="flex min-h-screen flex-col items-center justify-center p-4">
+            <Card className="w-full max-w-lg text-center p-8">
+                <AlertTriangle className="mx-auto h-12 w-12 text-primary" />
+                <h2 className="mt-6 text-2xl font-bold">Acesso Restrito</h2>
+                <p className="mt-2 text-muted-foreground">
+                    Você precisa estar autenticado para acessar o painel.
+                </p>
+                <div className="mt-6 flex justify-center gap-4">
+                    <Button onClick={() => router.push('/login')}>Fazer Login</Button>
+                    <Button variant="outline" onClick={() => router.push('/signup')}>Criar Conta</Button>
+                </div>
+            </Card>
+          </div>
+        );
     }
 
 
