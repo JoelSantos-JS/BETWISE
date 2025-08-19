@@ -13,33 +13,42 @@ interface BookmakerCardProps {
     bets: Bet[];
     onEdit: () => void;
     onDelete: () => void;
+    // This component is now also used to get calculated stats for export, so we make stats available
+    stats?: { profit: number; currentBalance: number };
 }
 
 export function BookmakerCard({ bookmaker, bets, onEdit, onDelete }: BookmakerCardProps) {
     const stats = useMemo(() => {
         const relevantBets = bets.filter(bet => {
             if (bet.type === 'single') return bet.bookmaker === bookmaker.name;
-            // For surebets, we need to check sub-bets
             if (bet.type === 'surebet') return bet.subBets?.some(sb => sb.bookmaker === bookmaker.name);
             return false;
         }).filter(bet => ['won', 'lost'].includes(bet.status));
 
         const profit = relevantBets.reduce((acc, bet) => {
+            let subProfit = 0;
             if (bet.type === 'single') {
-                 if (bet.status === 'won') return acc + (bet.stake! * bet.odds! - bet.stake!);
-                 if (bet.status === 'lost') return acc - bet.stake!;
+                 if (bet.status === 'won') subProfit = (bet.stake! * bet.odds! - bet.stake!);
+                 if (bet.status === 'lost') subProfit = -bet.stake!;
             } else if (bet.type === 'surebet') {
                 const subBet = bet.subBets?.find(sb => sb.bookmaker === bookmaker.name);
                 if (!subBet) return acc;
-                // Simplified profit calc for the house's perspective
-                if (bet.status === 'won') { // This means one leg of the surebet won
-                    const isWinningBet = subBet.stake * subBet.odds > (bet.totalStake ?? subBet.stake);
-                    return acc + (isWinningBet ? (subBet.stake * subBet.odds - subBet.stake) : -subBet.stake);
-                } else if (bet.status === 'lost') { // A surebet "lost" means something went wrong, assume loss of stake
-                     return acc - subBet.stake;
+                
+                if (bet.status === 'won') {
+                    // Find which bet won
+                    const winningBet = bet.subBets?.find(sb => (sb.stake * sb.odds - (bet.totalStake ?? 0)) > 0);
+                    if (winningBet?.bookmaker === bookmaker.name) {
+                        subProfit = winningBet.isFreebet ? (winningBet.stake * (winningBet.odds -1)) : (winningBet.stake * winningBet.odds);
+                    } else if(winningBet) {
+                        subProfit = 0;
+                    }
                 }
+                
+                // Subtract all stakes made at this bookmaker, as they are costs
+                const totalStakedAtHouse = bet.subBets?.filter(sb => sb.bookmaker === bookmaker.name).reduce((sum, s) => sum + s.stake, 0) ?? 0;
+                subProfit -= totalStakedAtHouse;
             }
-            return acc;
+            return acc + subProfit;
         }, 0);
 
         const currentBalance = bookmaker.initialBankroll + profit;
@@ -91,5 +100,3 @@ export function BookmakerCard({ bookmaker, bets, onEdit, onDelete }: BookmakerCa
         </Card>
     )
 }
-
-    

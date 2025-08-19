@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Bet, Bookmaker as BookmakerType } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, BarChart, AlertTriangle, Save, TrendingUp, TrendingDown, Calculator, Wallet, Landmark, Building } from 'lucide-react';
+import { PlusCircle, BarChart, AlertTriangle, Save, TrendingUp, TrendingDown, Calculator, Wallet, Landmark, Building, FileDown, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BetCard } from '@/components/bets/bet-card';
@@ -35,6 +35,7 @@ import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { BookmakerCard } from '@/components/bookmakers/bookmaker-card';
 import { BookmakerForm } from '@/components/bookmakers/bookmaker-form';
+import * as XLSX from 'xlsx';
 
 
 export default function BetsPage() {
@@ -45,6 +46,7 @@ export default function BetsPage() {
     const [bets, setBets] = useState<Bet[]>([]);
     const [bookmakers, setBookmakers] = useState<BookmakerType[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isExporting, setIsExporting] = useState(false);
     
     // Dialog/Modal states
     const [isBetFormOpen, setIsBetFormOpen] = useState(false);
@@ -249,6 +251,69 @@ export default function BetsPage() {
             setBookmakerToDelete(null);
         }
     };
+    
+    // Export handler
+    const handleExport = () => {
+        setIsExporting(true);
+        try {
+            // 1. Prepare Bets Data
+            const betsExportData = bets.map(bet => {
+                let profit = null;
+                if (bet.status === 'won' || bet.status === 'lost') {
+                    if (bet.type === 'single') {
+                        const stake = bet.stake ?? 0;
+                        const odds = bet.odds ?? 0;
+                        profit = bet.status === 'won' ? (stake * odds) - stake : -stake;
+                    } else if (bet.type === 'surebet') {
+                        profit = bet.guaranteedProfit ?? 0;
+                    }
+                }
+
+                return {
+                    'Data': new Date(bet.date).toLocaleDateString('pt-BR'),
+                    'Esporte': bet.sport,
+                    'Evento': bet.event,
+                    'Tipo': bet.type === 'single' ? 'Simples' : 'Surebet',
+                    'Seleção/Mercado': bet.type === 'single' ? bet.betType : bet.subBets?.map(sb => `${sb.bookmaker}: ${sb.betType}`).join(' | '),
+                    'Casa(s)': bet.type === 'single' ? bet.bookmaker : bet.subBets?.map(sb => sb.bookmaker).join(', '),
+                    'Stake Total': bet.type === 'single' ? bet.stake : bet.totalStake,
+                    'Odds Média': bet.type === 'single' ? bet.odds : '',
+                    'Status': bet.status,
+                    'Lucro/Prejuízo': profit,
+                    'Notas': bet.notes,
+                };
+            });
+
+            // 2. Prepare Bookmakers Data
+            const bookmakersExportData = bookmakers.map(bk => {
+                const { profit, currentBalance } = (new BookmakerCard({bookmaker: bk, bets, onEdit: ()=>{}, onDelete: ()=>{} })).props.stats;
+                return {
+                    'Casa de Apostas': bk.name,
+                    'Banca Inicial': bk.initialBankroll,
+                    'Lucro/Prejuízo na Casa': profit,
+                    'Saldo Atual': currentBalance,
+                };
+            });
+
+            // 3. Create Worksheets
+            const wb = XLSX.utils.book_new();
+            const wsBets = XLSX.utils.json_to_sheet(betsExportData);
+            const wsBookmakers = XLSX.utils.json_to_sheet(bookmakersExportData);
+
+            XLSX.utils.book_append_sheet(wb, wsBets, 'Apostas');
+            XLSX.utils.book_append_sheet(wb, wsBookmakers, 'Resumo das Bancas');
+
+            // 4. Download the file
+            XLSX.writeFile(wb, `BetWise_Dashboard_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+            toast({ title: "Exportação Concluída!", description: "Seu arquivo Excel foi baixado." });
+        } catch (error) {
+            console.error("Error exporting data:", error);
+            toast({ variant: 'destructive', title: 'Erro na Exportação', description: 'Não foi possível gerar o arquivo.' });
+        } finally {
+            setIsExporting(false);
+        }
+    };
 
 
     // Render logic
@@ -324,6 +389,10 @@ export default function BetsPage() {
                     </p>
                 </div>
                 <div className='flex items-center gap-4'>
+                     <Button size="lg" onClick={handleExport} variant="outline" disabled={isExporting} className="w-full md:w-auto">
+                        {isExporting ? <Loader2 className="animate-spin mr-2" /> : <FileDown className="mr-2"/>}
+                        {isExporting ? 'Exportando...' : 'Exportar para Excel'}
+                    </Button>
                     <Button size="lg" onClick={() => handleOpenBetForm()} className="w-full md:w-auto">
                         <PlusCircle className="mr-2"/>
                         Adicionar Aposta
