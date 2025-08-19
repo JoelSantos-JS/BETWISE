@@ -9,17 +9,17 @@ body {
 @layer base {
   :root {
     --background: 231 81% 8%; /* #020626 */
-    --foreground: 220 20% 96%; /* off-white */
+    --foreground: 220 20% 98%; /* Bright White */
     --card: 231 50% 12%;
-    --card-foreground: 220 20% 96%;
+    --card-foreground: 220 20% 98%;
     --popover: 231 50% 12%;
-    --popover-foreground: 220 20% 96%;
+    --popover-foreground: 220 20% 98%;
     --primary: 220 100% 70%; /* Bright Blue */
     --primary-foreground: 231 81% 8%;
     --secondary: 225 30% 20%;
-    --secondary-foreground: 220 20% 96%;
+    --secondary-foreground: 220 20% 98%;
     --muted: 225 30% 20%;
-    --muted-foreground: 220 20% 75%;
+    --muted-foreground: 220 20% 80%;
     --accent: 260 100% 75%; /* Purple Accent */
     --accent-foreground: 0 0% 9%;
     --destructive: 0 63% 40%;
@@ -33,28 +33,28 @@ body {
     --chart-4: 280 80% 70%;
     --chart-5: 320 80% 70%;
     --sidebar-background: 231 50% 12%;
-    --sidebar-foreground: 220 20% 96%;
+    --sidebar-foreground: 220 20% 98%;
     --sidebar-primary: 220 100% 70%;
     --sidebar-primary-foreground: 231 81% 8%;
     --sidebar-accent: 225 30% 20%;
-    --sidebar-accent-foreground: 220 20% 96%;
+    --sidebar-accent-foreground: 220 20% 98%;
     --sidebar-border: 225 30% 25%;
     --sidebar-ring: 220 100% 70%;
     --radius: 0.5rem;
   }
   .dark {
     --background: 231 81% 8%; /* #020626 */
-    --foreground: 220 20% 96%; /* off-white */
+    --foreground: 220 20% 98%; /* Bright White */
     --card: 231 50% 12%;
-    --card-foreground: 220 20% 96%;
+    --card-foreground: 220 20% 98%;
     --popover: 231 50% 12%;
-    --popover-foreground: 220 20% 96%;
+    --popover-foreground: 220 20% 98%;
     --primary: 220 100% 70%; /* Bright Blue */
     --primary-foreground: 231 81% 8%;
     --secondary: 225 30% 20%;
-    --secondary-foreground: 220 20% 96%;
+    --secondary-foreground: 220 20% 98%;
     --muted: 225 30% 20%;
-    --muted-foreground: 220 20% 75%;
+    --muted-foreground: 220 20% 80%;
     --accent: 260 100% 75%; /* Purple Accent */
     --accent-foreground: 0 0% 9%;
     --destructive: 0 63% 40%;
@@ -68,11 +68,11 @@ body {
     --chart-4: 280 80% 70%;
     --chart-5: 320 80% 70%;
     --sidebar-background: 231 50% 12%;
-    --sidebar-foreground: 220 20% 96%;
+    --sidebar-foreground: 220 20% 98%;
     --sidebar-primary: 220 100% 70%;
     --sidebar-primary-foreground: 231 81% 8%;
     --sidebar-accent: 225 30% 20%;
-    --sidebar-accent-foreground: 220 20% 96%;
+    --sidebar-accent-foreground: 220 20% 98%;
     --sidebar-border: 225 30% 25%;
     --sidebar-ring: 220 100% 70%;
   }
