@@ -26,6 +26,7 @@ import { BetStatusChart } from '@/components/bets/bet-status-chart';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { SurebetCalculator } from '@/components/bets/surebet-calculator';
 import { AdvancedSurebetCalculator } from '@/components/bets/advanced-surebet-calculator';
+import { TradingCalculator } from '@/components/bets/trading-calculator';
 import { isToday, isThisWeek, isThisMonth, startOfDay, startOfWeek, startOfMonth } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { INITIAL_BETS } from '@/lib/data';
@@ -250,16 +251,21 @@ export default function BetsPage() {
                 <div className="mb-8">
                      <h3 className="text-2xl font-bold mb-4 flex items-center gap-2">
                         <Calculator className="w-7 h-7 text-primary" />
-                        Calculadoras de Surebet
+                        Calculadoras
                      </h3>
                     <Tabs defaultValue="simple" className="w-full">
-                        <TabsList className="grid w-full grid-cols-2 mb-6">
-                            <TabsTrigger value="simple">Calculadora Simples</TabsTrigger>
-                            <TabsTrigger value="advanced">Calculadora Avançada</TabsTrigger>
+                        <TabsList className="grid w-full grid-cols-3 mb-6">
+                            <TabsTrigger value="simple">Surebet Simples</TabsTrigger>
+                            <TabsTrigger value="trading">Trading (Back/Lay)</TabsTrigger>
+                            <TabsTrigger value="advanced">Surebet Avançada</TabsTrigger>
                         </TabsList>
                         
                         <TabsContent value="simple">
                             <SurebetCalculator />
+                        </TabsContent>
+
+                         <TabsContent value="trading">
+                            <TradingCalculator />
                         </TabsContent>
                         
                         <TabsContent value="advanced">

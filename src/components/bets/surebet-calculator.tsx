@@ -1,252 +1,166 @@
 "use client";
 
 import { useState, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, Trash2, DollarSign, Percent, AlertCircle, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Label } from '../ui/label';
-import { Switch } from "@/components/ui/switch";
 
 type OddInput = {
   id: number;
-  oddValue: string;
-  stakeValue: string;
-  betType: string;
-  isLayBet: boolean;
-};
-
-type IndividualResult = {
-  lucro: number;
-  roi: number;
-  responsabilidade: number;
+  value: string;
 };
 
 type SurebetResult = {
   isSurebet: boolean;
-  lucroMinimo: number;
-  roiMinimo: number;
-  stakeTotal: number;
+  stakes: number[];
+  lucro: number;
+  roi: number;
+  retornos: number[];
 };
 
-function calculateResults(inputs: OddInput[]) {
-  const validInputs = inputs.filter(input => input.oddValue && parseFloat(input.oddValue) > 0);
+function calculateSurebet(oddInputs: OddInput[], totalStake: number) {
+  const odds = oddInputs.map(input => parseFloat(input.value)).filter(odd => !isNaN(odd) && odd > 0);
   
-  if (validInputs.length < 2) {
-    return {
-      individualResults: [],
-      surebetResult: null,
-    };
+  if (odds.length < 2 || totalStake <= 0) {
+    return null;
   }
 
-  const individualResults = validInputs.map((input, index) => {
-    const odd = parseFloat(input.oddValue);
-    const stake = parseFloat(input.stakeValue) || 0;
-    let lucro: number;
-    let roi: number;
-    let responsabilidade: number;
+  const S = odds.reduce((sum, odd) => sum + 1 / odd, 0);
 
-    if (input.isLayBet) {
-      // Aposta Contra (Lay Bet)
-      lucro = stake; // O lucro é o valor da stake (ganho alvo)
-      responsabilidade = stake * (odd - 1); // Risco
-      roi = responsabilidade > 0 ? (lucro / responsabilidade) * 100 : 0; // ROI é sobre o risco
-    } else {
-      // Aposta a Favor (Back Bet)
-      lucro = stake * (odd - 1); // Lucro é (retorno - stake)
-      responsabilidade = 0; // Não se aplica
-      roi = stake > 0 ? (lucro / stake) * 100 : 0; // ROI é sobre a stake
-    }
-    
-    return { lucro, roi, responsabilidade };
-  });
+  if (S >= 1) {
+    return { isSurebet: false, stakes: [], lucro: 0, roi: 0, retornos: [] };
+  }
 
-  // Cálculo da Surebet (Resumo Geral)
-  const stakeTotal = validInputs.reduce((sum, input) => sum + (parseFloat(input.stakeValue) || 0), 0);
-  
-  const lucrosPorCenario = validInputs.map((input, index) => {
-    const odd = parseFloat(input.oddValue);
-    const stake = parseFloat(input.stakeValue) || 0;
-    
-    if (input.isLayBet) {
-      // Se a aposta Lay for VENCEDORA (o resultado não acontece), você ganha a stake.
-      // O total investido é a soma das stakes das outras apostas + a responsabilidade desta.
-      const stakesOutras = stakeTotal - stake;
-      return stake - stakesOutras; // Este cálculo é complexo e depende da estratégia.
-                                   // Por agora, vamos focar no cálculo individual correto.
-    }
-    // Se a aposta Back for VENCEDORA, o retorno é odd * stake, e o lucro é retorno - stake total
-    return (odd * stake) - stakeTotal;
-  });
-
-  const lucroMinimo = Math.min(...lucrosPorCenario);
-  const isSurebet = lucroMinimo > 0;
-  const roiMinimo = stakeTotal > 0 ? (lucroMinimo / stakeTotal) * 100 : 0;
-  
-  const surebetResult: SurebetResult | null = validInputs.length > 1 ? {
-    isSurebet,
-    lucroMinimo,
-    roiMinimo,
-    stakeTotal,
-  } : null;
+  const stakes = odds.map(odd => (totalStake / odd) / S);
+  const retornos = stakes.map((stake, i) => stake * odds[i]);
+  const lucro = retornos[0] - totalStake;
+  const roi = (lucro / totalStake) * 100;
 
   return {
-    individualResults,
-    surebetResult,
+    isSurebet: true,
+    stakes,
+    lucro,
+    roi,
+    retornos,
   };
 }
 
 export function SurebetCalculator() {
-  const [betInputs, setBetInputs] = useState([
-    { id: 1, oddValue: '3.0', stakeValue: '70', betType: 'Casa 1', isLayBet: false },
-    { id: 2, oddValue: '3.5', stakeValue: '60', betType: 'Casa 2', isLayBet: false },
+  const [totalStake, setTotalStake] = useState('100');
+  const [oddInputs, setOddInputs] = useState([
+    { id: 1, value: '2.10' },
+    { id: 2, value: '2.20' },
   ]);
 
-  const handleAddBetInput = () => {
-    const newId = betInputs.length > 0 ? Math.max(...betInputs.map(b => b.id)) + 1 : 1;
-    setBetInputs([...betInputs, { id: newId, oddValue: '', stakeValue: '', betType: `Casa ${newId}`, isLayBet: false }]);
+  const handleAddOddInput = () => {
+    const newId = oddInputs.length > 0 ? Math.max(...oddInputs.map(o => o.id)) + 1 : 1;
+    setOddInputs([...oddInputs, { id: newId, value: '' }]);
   };
 
-  const handleRemoveBetInput = (id: number) => {
-    setBetInputs(betInputs.filter(bet => bet.id !== id));
+  const handleRemoveOddInput = (id: number) => {
+    setOddInputs(oddInputs.filter(odd => odd.id !== id));
   };
 
-  const handleBetInputChange = (id: number, field: keyof OddInput, value: string | boolean) => {
-    setBetInputs(betInputs.map(bet => (bet.id === id ? { ...bet, [field]: value } : bet)));
+  const handleOddInputChange = (id: number, newValue: string) => {
+    setOddInputs(oddInputs.map(odd => (odd.id === id ? { ...odd, value: newValue } : odd)));
   };
 
-  const calculation = useMemo(() => calculateResults(betInputs), [betInputs]);
+  const calculation = useMemo(() => calculateSurebet(oddInputs, parseFloat(totalStake)), [oddInputs, totalStake]);
 
   return (
     <Card className="bg-card/50 border-dashed">
       <CardHeader>
-        <CardTitle className="text-xl">Calculadora de Apostas</CardTitle>
+        <CardTitle className="text-xl">Calculadora de Surebet Simples</CardTitle>
+        <CardDescription>Insira as odds e o valor total para encontrar o lucro garantido.</CardDescription>
       </CardHeader>
-      <CardContent className="p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {betInputs.map((betInput, index) => {
-            const result = calculation.individualResults[index];
-            return (
-              <Card key={betInput.id} className="relative">
-                <CardHeader className="pb-4">
-                  <div className="flex items-center justify-between">
-                    <Input
-                      value={betInput.betType}
-                      onChange={(e) => handleBetInputChange(betInput.id, 'betType', e.target.value)}
-                      className="text-sm font-semibold p-0 border-0 h-auto bg-transparent focus-visible:ring-0"
-                    />
-                    {betInputs.length > 2 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleRemoveBetInput(betInput.id)}
-                        className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs text-muted-foreground">Aposta Contra (Lay)</Label>
-                    <Switch
-                      checked={betInput.isLayBet}
-                      onCheckedChange={(checked) => handleBetInputChange(betInput.id, 'isLayBet', checked)}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Odd</Label>
-                    <Input
-                      type="number"
-                      placeholder="ex: 2.50"
-                      value={betInput.oddValue}
-                      onChange={(e) => handleBetInputChange(betInput.id, 'oddValue', e.target.value)}
-                      className="font-mono"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">{betInput.isLayBet ? 'Ganho Alvo (R$)' : 'Stake (R$)'}</Label>
-                    <Input
-                      type="number"
-                      placeholder="ex: 100.00"
-                      value={betInput.stakeValue}
-                      onChange={(e) => handleBetInputChange(betInput.id, 'stakeValue', e.target.value)}
-                      className="font-mono"
-                    />
-                  </div>
-                  {result && (
-                    <div className="space-y-2 pt-2 border-t">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">{betInput.isLayBet ? 'Responsabilidade' : 'Lucro'}</span>
-                        <span className="font-semibold text-primary">R$ {(betInput.isLayBet ? result.responsabilidade : result.lucro)?.toFixed(2) || '0.00'}</span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">ROI</span>
-                        <span className="font-semibold text-primary">{result.roi?.toFixed(2) || '0.00'}%</span>
-                      </div>
-                       {betInput.isLayBet && (
-                        <div className="flex justify-between text-xs">
-                            <span className="text-muted-foreground">Lucro</span>
-                            <span className="font-semibold text-primary">R$ {result.lucro?.toFixed(2) || '0.00'}</span>
-                        </div>
-                       )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
+      <CardContent className="space-y-6">
+        <div className="space-y-2">
+            <Label htmlFor="total-stake">Valor Total a Apostar (R$)</Label>
+            <Input
+            id="total-stake"
+            type="number"
+            placeholder="ex: 100.00"
+            value={totalStake}
+            onChange={(e) => setTotalStake(e.target.value)}
+            className="max-w-xs text-lg font-mono"
+            />
         </div>
-        
-        <div className="flex justify-center mb-6">
-          <Button variant="outline" onClick={handleAddBetInput}>
-            <PlusCircle className="mr-2" /> Adicionar Casa
+
+        <div className="space-y-4">
+          <Label>Odds das Casas de Apostas</Label>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {oddInputs.map((oddInput, index) => (
+              <div key={oddInput.id} className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  placeholder={`Odd ${index + 1}`}
+                  value={oddInput.value}
+                  onChange={(e) => handleOddInputChange(oddInput.id, e.target.value)}
+                  className="font-mono"
+                />
+                {oddInputs.length > 2 && (
+                    <Button variant="ghost" size="icon" onClick={() => handleRemoveOddInput(oddInput.id)} className="text-muted-foreground hover:text-destructive">
+                        <Trash2 className="h-4 w-4" />
+                    </Button>
+                )}
+              </div>
+            ))}
+          </div>
+          <Button variant="outline" onClick={handleAddOddInput}>
+            <PlusCircle className="mr-2" /> Adicionar Odd
           </Button>
         </div>
 
-        {calculation.surebetResult && (
+        {calculation && (
           <Card className="bg-muted/50">
             <CardHeader>
-              <CardTitle className="text-lg">Resumo Geral da Operação</CardTitle>
+              <CardTitle className="text-lg">Resultado da Simulação</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className='p-4 bg-background rounded-lg'>
-                <p className="text-sm text-muted-foreground flex items-center gap-2 mb-1"><DollarSign /> Stake Total</p>
-                <p className="text-2xl font-bold">{calculation.surebetResult.stakeTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-              </div>
-              <div className={cn(
-                'p-4 rounded-lg',
-                calculation.surebetResult.isSurebet ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-600'
-              )}>
-                <p className="text-sm flex items-center gap-2 mb-1"><ShieldCheck /> Lucro Mínimo Garantido</p>
-                <p className="text-2xl font-bold">{calculation.surebetResult.lucroMinimo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-              </div>
-              <div className={cn(
-                'p-4 rounded-lg',
-                calculation.surebetResult.isSurebet ? 'bg-green-500/10 text-green-600' : 'bg-red-500/10 text-red-600'
-              )}>
-                <p className="text-sm flex items-center gap-2 mb-1"><Percent /> ROI Mínimo</p>
-                <p className="text-2xl font-bold">{calculation.surebetResult.roiMinimo.toFixed(2)}%</p>
-              </div>
-              {calculation.surebetResult.isSurebet ? (
-                <div className="md:col-span-3 p-4 bg-green-500/5 border border-green-500/20 rounded-lg flex items-center gap-3">
-                  <ShieldCheck className="w-6 h-6 text-green-500" />
-                  <div>
-                    <h3 className="font-bold text-green-500">SUREBET CONFIRMADA!</h3>
-                    <p className="text-sm text-muted-foreground">Esta operação garante lucro, independentemente do resultado.</p>
-                  </div>
-                </div>
-              ) : (
-                 <div className="md:col-span-3 p-4 bg-red-500/5 border border-red-500/20 rounded-lg flex items-center gap-3">
-                  <AlertCircle className="w-6 h-6 text-red-500" />
-                  <div>
-                    <h3 className="font-bold text-red-500">NÃO É UMA SUREBET LUCRATIVA</h3>
-                    <p className="text-sm text-muted-foreground">Com os valores atuais, há um cenário com prejuízo. Ajuste as stakes ou odds.</p>
-                  </div>
-                </div>
-              )}
+            <CardContent className="space-y-4">
+                {calculation.isSurebet ? (
+                     <div className="md:col-span-3 p-4 bg-green-500/5 border border-green-500/20 rounded-lg flex items-center gap-3">
+                        <ShieldCheck className="w-6 h-6 text-green-500" />
+                        <div>
+                            <h3 className="font-bold text-green-500">SUREBET CONFIRMADA!</h3>
+                            <p className="text-sm text-muted-foreground">Esta operação garante lucro, independentemente do resultado.</p>
+                        </div>
+                    </div>
+                ) : (
+                     <div className="md:col-span-3 p-4 bg-red-500/5 border border-red-500/20 rounded-lg flex items-center gap-3">
+                        <AlertCircle className="w-6 h-6 text-red-500" />
+                        <div>
+                            <h3 className="font-bold text-red-500">NÃO É UMA SUREBET</h3>
+                            <p className="text-sm text-muted-foreground">Com as odds atuais, não há lucro garantido.</p>
+                        </div>
+                    </div>
+                )}
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {calculation.stakes.map((stake, i) => (
+                        <div key={i} className='p-4 bg-background rounded-lg'>
+                            <p className="text-sm text-muted-foreground mb-1">Aposta na Odd {parseFloat(oddInputs[i].value).toFixed(2)}</p>
+                            <p className="text-xl font-bold">{stake.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                        </div>
+                    ))}
+                 </div>
+                 {calculation.isSurebet && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className='p-4 bg-background rounded-lg'>
+                            <p className="text-sm text-muted-foreground flex items-center gap-2 mb-1"><DollarSign /> Lucro Garantido</p>
+                            <p className="text-2xl font-bold text-green-500">{calculation.lucro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                        </div>
+                         <div className='p-4 bg-background rounded-lg'>
+                            <p className="text-sm text-muted-foreground flex items-center gap-2 mb-1"><Percent /> Retorno sobre Investimento (ROI)</p>
+                            <p className="text-2xl font-bold text-green-500">{calculation.roi.toFixed(2)}%</p>
+                        </div>
+                         <div className='p-4 bg-background rounded-lg'>
+                            <p className="text-sm text-muted-foreground flex items-center gap-2 mb-1"><ShieldCheck /> Retorno Total</p>
+                            <p className="text-2xl font-bold">{calculation.retornos[0]?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                        </div>
+                    </div>
+                 )}
             </CardContent>
           </Card>
         )}
