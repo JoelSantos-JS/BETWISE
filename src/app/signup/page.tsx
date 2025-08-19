@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -52,13 +53,20 @@ export default function SignUpPage() {
         const errorCode = error.code;
         let errorMessage = 'Ocorreu um erro ao criar a conta.';
         if (errorCode === 'auth/email-already-in-use') {
-            errorMessage = 'Este email já está em uso. Tente fazer login.';
+            errorMessage = 'Este email já está em uso. Redirecionando para o login...';
+             toast({
+                variant: 'destructive',
+                title: 'Email já cadastrado',
+                description: errorMessage,
+            });
+            setTimeout(() => router.push('/login'), 2000);
+        } else {
+            toast({
+                variant: 'destructive',
+                title: 'Falha no Cadastro',
+                description: errorMessage,
+            });
         }
-        toast({
-            variant: 'destructive',
-            title: 'Falha no Cadastro',
-            description: errorMessage,
-        });
     } finally {
         setIsLoading(false);
     }
