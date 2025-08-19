@@ -9,8 +9,8 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex-col md:flex bg-background">
-      <div className="border-b">
+    <div className="flex-col md:flex">
+      <div className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-10">
         <div className="flex h-16 items-center px-4 md:px-8">
           <Link href="/dashboard" className="flex items-center gap-2">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" className="h-6 w-6">
