@@ -78,9 +78,9 @@ export default function SignUpPage() {
         <div className="relative z-20 mt-auto">
           <blockquote className="space-y-2">
             <p className="text-lg">
-              &ldquo;Esta plataforma transformou a maneira como analiso minhas apostas. As ferramentas de surebet e gestão de banca são indispensáveis.&rdquo;
+              &ldquo;Bem-vindo ao futuro das apostas inteligentes. Analise, gerencie e maximize seus resultados com nossas ferramentas de ponta.&rdquo;
             </p>
-            <footer className="text-sm">Sofia Davis</footer>
+            <footer className="text-sm">Equipe BetWise</footer>
           </blockquote>
         </div>
       </div>
