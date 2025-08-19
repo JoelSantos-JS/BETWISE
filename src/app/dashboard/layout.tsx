@@ -9,7 +9,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex-col md:flex">
+    <div className="flex-col md:flex bg-background">
       <div className="border-b">
         <div className="flex h-16 items-center px-4 md:px-8">
           <Link href="/dashboard" className="flex items-center gap-2">

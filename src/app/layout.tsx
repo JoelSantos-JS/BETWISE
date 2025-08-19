@@ -19,7 +19,8 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
         <style>{`
-          html,body{height:100%;margin:0;background:#020626;overflow:hidden}
+          html,body{height:100%;margin:0;overflow:hidden}
+          body { background: #020626; }
           canvas{position:fixed;inset:0;width:100%;height:100%;display:block; z-index: -1;}
           .vignette{position:fixed;inset:0;pointer-events:none;
             background: radial-gradient(70% 90% at 50% 65%, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 55%, rgba(0,0,0,.45) 100%);
@@ -29,7 +30,7 @@ export default function RootLayout({
       <body className="font-body antialiased">
         <canvas id="gl"></canvas>
         <div className="vignette"></div>
-        <div style={{position: 'relative', zIndex: 1}}>
+        <div style={{position: 'relative', zIndex: 1, height: '100vh', overflowY: 'auto'}}>
             {children}
         </div>
         <Toaster />
