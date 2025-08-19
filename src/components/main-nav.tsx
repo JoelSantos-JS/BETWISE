@@ -23,12 +23,6 @@ export function MainNav({
       active: pathname === `/dashboard`,
     },
     {
-      href: `/dashboard/add-bet`,
-      label: "Add Bet",
-      icon: PlusCircle,
-      active: pathname === `/dashboard/add-bet`,
-    },
-    {
       href: `/dashboard/ai-insights`,
       label: "AI Insights",
       icon: Sparkles,
@@ -59,3 +53,5 @@ export function MainNav({
     </nav>
   );
 }
+
+    

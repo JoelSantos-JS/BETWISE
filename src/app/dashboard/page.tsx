@@ -2,9 +2,9 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import type { Bet } from '@/lib/types';
+import type { Bet, Bookmaker as BookmakerType } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, BarChart, AlertTriangle, Save, TrendingUp, TrendingDown, Calculator, Wallet, Landmark } from 'lucide-react';
+import { PlusCircle, BarChart, AlertTriangle, Save, TrendingUp, TrendingDown, Calculator, Wallet, Landmark, Building } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BetCard } from '@/components/bets/bet-card';
@@ -28,45 +28,50 @@ import { SurebetCalculator } from '@/components/bets/surebet-calculator';
 import { AdvancedSurebetCalculator } from '@/components/bets/advanced-surebet-calculator';
 import { TradingCalculator } from '@/components/bets/trading-calculator';
 import { startOfDay, startOfWeek, startOfMonth } from 'date-fns';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc, addDoc, Timestamp, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, addDoc, Timestamp, writeBatch } from 'firebase/firestore';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
-import { Card } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { BookmakerCard } from '@/components/bookmakers/bookmaker-card';
+import { BookmakerForm } from '@/components/bookmakers/bookmaker-form';
 
 
 export default function BetsPage() {
     const { user, loading: authLoading } = useAuth();
     const router = useRouter();
+    
+    // States
     const [bets, setBets] = useState<Bet[]>([]);
+    const [bookmakers, setBookmakers] = useState<BookmakerType[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [isFormOpen, setIsFormOpen] = useState(false);
+    
+    // Dialog/Modal states
+    const [isBetFormOpen, setIsBetFormOpen] = useState(false);
     const [betToEdit, setBetToEdit] = useState<Bet | null>(null);
     const [betToDelete, setBetToDelete] = useState<Bet | null>(null);
-    const [filterStatus, setFilterStatus] = useState<string>("pending");
-    const [initialBankroll, setInitialBankroll] = useState<number>(5000);
-    const [bankrollInput, setBankrollInput] = useState<string>("5000");
+    const [isBookmakerFormOpen, setIsBookmakerFormOpen] = useState(false);
+    const [bookmakerToEdit, setBookmakerToEdit] = useState<BookmakerType | null>(null);
+    const [bookmakerToDelete, setBookmakerToDelete] = useState<BookmakerType | null>(null);
 
+    // Filter states
+    const [filterStatus, setFilterStatus] = useState<string>("pending");
+    
     const { toast } = useToast();
 
+    // Data fetching
     const fetchUserData = useCallback(async (userId: string) => {
         setIsLoading(true);
         try {
-            // Fetch user profile for bankroll
-            const userDocRef = doc(db, 'users', userId);
-            const userDoc = await getDoc(userDocRef);
-            if (userDoc.exists()) {
-                const userData = userDoc.data();
-                setInitialBankroll(userData.initialBankroll || 5000);
-                setBankrollInput(String(userData.initialBankroll || 5000));
-            }
-
-            // Fetch bets
             const betsCollectionRef = collection(db, 'users', userId, 'bets');
-            const querySnapshot = await getDocs(betsCollectionRef);
-            const betsData = querySnapshot.docs.map(doc => {
+            const bookmakersCollectionRef = collection(db, 'users', userId, 'bookmakers');
+
+            const [betsSnapshot, bookmakersSnapshot] = await Promise.all([
+                getDocs(betsCollectionRef),
+                getDocs(bookmakersCollectionRef)
+            ]);
+
+            const betsData = betsSnapshot.docs.map(doc => {
                 const data = doc.data();
                 return {
                     ...data,
@@ -75,6 +80,10 @@ export default function BetsPage() {
                 } as Bet;
             });
             setBets(betsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+            
+            const bookmakersData = bookmakersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as BookmakerType);
+            setBookmakers(bookmakersData);
+
         } catch (error) {
             console.error("Error fetching user data:", error);
             toast({
@@ -95,118 +104,81 @@ export default function BetsPage() {
             router.replace('/login');
         }
     }, [user, authLoading, fetchUserData, router]);
-
-    const handleSaveBankroll = async () => {
-        if (!user) {
-            toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado para salvar.' });
-            return;
-        }
-        const newBankroll = Number(bankrollInput);
-        if (isNaN(newBankroll) || newBankroll < 0) {
-            toast({ variant: 'destructive', title: 'Valor Inválido', description: 'Por favor, insira um valor numérico positivo para a banca.' });
-            return;
-        }
-
-        try {
-            const userDocRef = doc(db, 'users', user.uid);
-            await setDoc(userDocRef, { initialBankroll: newBankroll }, { merge: true });
-            setInitialBankroll(newBankroll);
-            toast({ title: 'Banca Salva!', description: 'Sua banca inicial foi atualizada com sucesso.' });
-        } catch (error) {
-            console.error("Error saving bankroll:", error);
-            toast({ variant: 'destructive', title: 'Erro ao Salvar', description: 'Não foi possível atualizar sua banca.' });
-        }
-    };
-
-
+    
+    // Memoized calculations
     const summaryStats = useMemo(() => {
-        const calculateProfitForPeriod = (startDate: Date) => {
-            const periodBets = bets.filter(bet => new Date(bet.date) >= startDate && (bet.status === 'won' || bet.status === 'lost'));
-            
-            return periodBets.reduce((acc, bet) => {
-                 if (bet.type === 'single') {
-                    const stake = bet.stake ?? 0;
-                    const odds = bet.odds ?? 0;
-                    if (bet.status === 'won') return acc + (stake * odds) - stake;
-                    if (bet.status === 'lost') return acc - stake;
-                 } else if (bet.type === 'surebet' && bet.status === 'won') {
-                    return acc + (bet.guaranteedProfit ?? 0);
-                 } else if (bet.type === 'surebet' && bet.status === 'lost') {
-                     return acc - (bet.totalStake ?? 0);
-                 }
-                 return acc;
-            }, 0);
-        };
-        
-        const now = new Date();
-        const dailyProfit = calculateProfitForPeriod(startOfDay(now));
-        const weeklyProfit = calculateProfitForPeriod(startOfWeek(now, { weekStartsOn: 1 }));
-        const monthlyProfit = calculateProfitForPeriod(startOfMonth(now));
+        const totalInitialBankroll = bookmakers.reduce((acc, b) => acc + b.initialBankroll, 0);
 
-        const allTimeProfit = calculateProfitForPeriod(new Date(0));
-        const currentBankroll = initialBankroll + allTimeProfit;
+        const allTimeProfit = bets.reduce((acc, bet) => {
+             if (bet.status !== 'won' && bet.status !== 'lost') return acc;
+
+             if (bet.type === 'single') {
+                const stake = bet.stake ?? 0;
+                const odds = bet.odds ?? 0;
+                if (bet.status === 'won') return acc + (stake * odds) - stake;
+                if (bet.status === 'lost') return acc - stake;
+             } else if (bet.type === 'surebet') {
+                 // Profit is calculated from the winning leg, not just the guaranteed one, for total P/L
+                 const wonSubBet = bet.subBets?.find(sb => sb.id.endsWith(bet.status)); // Simplified assumption
+                 if (bet.status === 'won' && bet.guaranteedProfit) return acc + bet.guaranteedProfit;
+                 if (bet.status === 'lost') return acc - (bet.totalStake ?? 0);
+             }
+             return acc;
+        }, 0);
+
+        const currentBankroll = totalInitialBankroll + allTimeProfit;
         
         return {
-            dailyProfit,
-            weeklyProfit,
-            monthlyProfit,
-            currentBankroll
+            totalInitialBankroll,
+            allTimeProfit,
+            currentBankroll,
+            totalBets: bets.length,
+            winRate: bets.length > 0 ? (bets.filter(b => b.status === 'won').length / bets.filter(b => ['won', 'lost'].includes(b.status)).length) * 100 : 0
         }
-    }, [bets, initialBankroll]);
+    }, [bets, bookmakers]);
 
-     const filteredBets = useMemo(() => {
+    const filteredBets = useMemo(() => {
         const otherStatuses: Bet['status'][] = ['cashed_out', 'void'];
         if (filterStatus === 'all') return bets;
-        if (filterStatus === 'other') {
-            return bets.filter(bet => otherStatuses.includes(bet.status));
-        }
+        if (filterStatus === 'other') return bets.filter(bet => otherStatuses.includes(bet.status));
         return bets.filter(bet => bet.status === filterStatus);
     }, [bets, filterStatus]);
-
-
-    const handleOpenForm = (bet: Bet | null = null) => {
+    
+    // CRUD Handlers for Bets
+    const handleOpenBetForm = (bet: Bet | null = null) => {
         setBetToEdit(bet);
-        setIsFormOpen(true);
+        setIsBetFormOpen(true);
     }
 
     const handleSaveBet = async (betData: Omit<Bet, 'id'>) => {
-         if (!user) {
-            toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado.' });
-            return;
-        }
+         if (!user) { toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado.' }); return; }
         const isEditing = !!betToEdit;
-        const betToSave = {
-            ...betData,
-            date: Timestamp.fromDate(new Date(betData.date))
-        };
-        
+        const betToSave = { ...betData, date: Timestamp.fromDate(new Date(betData.date)) };
         const betsCollectionRef = collection(db, 'users', user.uid, 'bets');
 
         try {
             if (isEditing) {
                 const betDocRef = doc(betsCollectionRef, betToEdit.id);
                 await setDoc(betDocRef, betToSave);
+                // @ts-ignore
                 setBets(bets.map(b => (b.id === betToEdit.id ? { ...betToSave, id: b.id, date: new Date(betData.date) } as Bet : b)));
                 toast({ title: "Aposta Atualizada!", description: `A aposta no evento "${betData.event}" foi atualizada.` });
             } else {
                 const newDocRef = await addDoc(betsCollectionRef, betToSave);
-                setBets(prev => [{...betData, id: newDocRef.id }, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+                setBets(prev => [{...betData, id: newDocRef.id } as Bet, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
                 toast({ title: "Aposta Adicionada!", description: `Sua aposta em "${betData.event}" foi registrada.` });
             }
         } catch (error) {
             console.error("Error saving bet:", error);
             toast({ variant: 'destructive', title: 'Erro ao salvar', description: 'Não foi possível salvar a aposta no banco de dados.' });
         } finally {
-            setIsFormOpen(false);
+            setIsBetFormOpen(false);
             setBetToEdit(null);
         }
     };
 
     const handleDeleteBet = async (betId: string) => {
-        if (!user) {
-            toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado.' });
-            return;
-        }
+        if (!user) { toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado.' }); return; }
         const bet = bets.find(b => b.id === betId);
         if (!bet) return;
         
@@ -220,10 +192,69 @@ export default function BetsPage() {
              toast({ variant: 'destructive', title: 'Erro ao excluir', description: 'Não foi possível remover a aposta do banco de dados.' });
         }
     }
+    
+    // CRUD Handlers for Bookmakers
+    const handleOpenBookmakerForm = (bookmaker: BookmakerType | null = null) => {
+        setBookmakerToEdit(bookmaker);
+        setIsBookmakerFormOpen(true);
+    };
 
+    const handleSaveBookmaker = async (bookmakerData: Omit<BookmakerType, 'id'>) => {
+        if (!user) { toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado.' }); return; }
+        const isEditing = !!bookmakerToEdit;
+        const bookmakersCollectionRef = collection(db, 'users', user.uid, 'bookmakers');
+
+        try {
+            if (isEditing) {
+                const bookmakerDocRef = doc(bookmakersCollectionRef, bookmakerToEdit.id);
+                await setDoc(bookmakerDocRef, bookmakerData, { merge: true });
+                setBookmakers(bks => bks.map(b => b.id === bookmakerToEdit.id ? { ...bookmakerData, id: b.id } : b));
+                toast({ title: "Casa Atualizada!", description: `Os dados de "${bookmakerData.name}" foram atualizados.` });
+            } else {
+                const newDocRef = await addDoc(bookmakersCollectionRef, bookmakerData);
+                setBookmakers(bks => [...bks, { ...bookmakerData, id: newDocRef.id }]);
+                toast({ title: "Casa Adicionada!", description: `A casa "${bookmakerData.name}" foi registrada.` });
+            }
+        } catch (error) {
+            console.error("Error saving bookmaker:", error);
+            toast({ variant: 'destructive', title: 'Erro ao salvar', description: 'Não foi possível salvar a casa de apostas.' });
+        } finally {
+            setIsBookmakerFormOpen(false);
+            setBookmakerToEdit(null);
+        }
+    };
+
+    const handleDeleteBookmaker = async (bookmakerId: string) => {
+         if (!user) { toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado.' }); return; }
+        const bookmaker = bookmakers.find(b => b.id === bookmakerId);
+        if (!bookmaker) return;
+        
+        // Find bets associated with this bookmaker
+        const associatedBets = bets.filter(bet => bet.bookmaker === bookmaker.name);
+        
+        if (associatedBets.length > 0) {
+            toast({ variant: 'destructive', title: 'Ação Bloqueada', description: 'Não é possível excluir uma casa que possui apostas associadas.' });
+            setBookmakerToDelete(null);
+            return;
+        }
+
+        try {
+            await deleteDoc(doc(db, "users", user.uid, "bookmakers", bookmakerId));
+            setBookmakers(bks => bks.filter(b => b.id !== bookmakerId));
+            toast({ variant: 'destructive', title: "Casa Excluída!", description: `A casa "${bookmaker.name}" foi removida.` });
+        } catch (error) {
+             console.error("Error deleting bookmaker:", error);
+             toast({ variant: 'destructive', title: 'Erro ao excluir', description: 'Não foi possível remover a casa do banco de dados.' });
+        } finally {
+            setBookmakerToDelete(null);
+        }
+    };
+
+
+    // Render logic
     if (authLoading || isLoading) {
          return (
-            <div className="w-screen h-screen flex items-center justify-center">
+            <div className="w-full h-full flex items-center justify-center">
                 <div className="space-y-4 w-1/2">
                     <Skeleton className="h-12 w-full" />
                     <Skeleton className="h-32 w-full" />
@@ -235,17 +266,17 @@ export default function BetsPage() {
 
     if (!user) {
         return (
-          <div className="flex min-h-screen flex-col items-center justify-center p-4">
+          <div className="flex min-h-[calc(100vh-10rem)] flex-col items-center justify-center p-4">
             <Card className="w-full max-w-lg text-center p-8">
-                <AlertTriangle className="mx-auto h-12 w-12 text-primary" />
-                <h2 className="mt-6 text-2xl font-bold">Acesso Restrito</h2>
-                <p className="mt-2 text-muted-foreground">
-                    Você precisa estar autenticado para acessar o painel.
-                </p>
-                <div className="mt-6 flex justify-center gap-4">
-                    <Button onClick={() => router.push('/login')}>Fazer Login</Button>
-                    <Button variant="outline" onClick={() => router.push('/signup')}>Criar Conta</Button>
-                </div>
+                <CardHeader>
+                    <AlertTriangle className="mx-auto h-12 w-12 text-primary" />
+                    <CardTitle className="mt-6 text-2xl font-bold">Acesso Restrito</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p className="mt-2 text-muted-foreground">
+                        Você precisa estar autenticado para acessar o painel.
+                    </p>
+                </CardContent>
             </Card>
           </div>
         );
@@ -255,12 +286,12 @@ export default function BetsPage() {
     const renderBetList = () => {
         if (filteredBets.length > 0) {
             return (
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {filteredBets.map(bet => (
                         <BetCard 
                             key={bet.id} 
                             bet={bet} 
-                            onEdit={() => handleOpenForm(bet)}
+                            onEdit={() => handleOpenBetForm(bet)}
                             onDelete={() => setBetToDelete(bet)}
                         />
                     ))}
@@ -269,10 +300,10 @@ export default function BetsPage() {
         }
         
         return (
-            <div className="text-center py-20 bg-muted rounded-lg">
+            <div className="text-center py-20 bg-muted rounded-lg col-span-full">
                 <h3 className="text-2xl font-bold">Nenhuma Aposta Encontrada</h3>
                 <p className="text-muted-foreground mt-2 mb-6">Não há apostas com este status. Adicione uma nova aposta ou mude o filtro.</p>
-                <Button size="lg" onClick={() => handleOpenForm()}>
+                <Button size="lg" onClick={() => handleOpenBetForm()}>
                     <PlusCircle className="mr-2"/>
                     Adicionar Aposta
                 </Button>
@@ -282,19 +313,18 @@ export default function BetsPage() {
 
     return (
         <>
-        <div className="flex flex-col min-h-screen">
-             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <div className="max-w-2xl">
                     <h2 className="text-3xl font-bold mb-1 flex items-center gap-2">
-                    <BarChart className="w-8 h-8 text-primary" />
-                    Dashboard de Apostas
+                        <BarChart className="w-8 h-8 text-primary" />
+                        Painel de Controle
                     </h2>
                     <p className="text-muted-foreground">
                         Gerencie suas apostas, analise riscos e acompanhe seus resultados.
                     </p>
                 </div>
                 <div className='flex items-center gap-4'>
-                    <Button size="lg" onClick={() => handleOpenForm()} className="w-full md:w-auto">
+                    <Button size="lg" onClick={() => handleOpenBetForm()} className="w-full md:w-auto">
                         <PlusCircle className="mr-2"/>
                         Adicionar Aposta
                     </Button>
@@ -302,61 +332,52 @@ export default function BetsPage() {
             </div>
             
              <div className="mb-8">
-                <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-4 gap-4">
+                 <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-4 gap-4">
                      <h3 className="text-2xl font-bold flex items-center gap-2">
                         <Wallet className="w-7 h-7 text-primary" />
-                        Gestão de Banca
+                        Resumo Geral
                      </h3>
-                     <div className="flex items-center gap-2 w-full md:w-auto">
-                         <div className='flex-1'>
-                            <Label htmlFor="bankroll" className="text-sm font-medium">Banca Inicial</Label>
-                            <div className="relative">
-                                <Landmark className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                                <Input
-                                    id="bankroll"
-                                    type="number"
-                                    step="10"
-                                    value={bankrollInput}
-                                    onChange={(e) => setBankrollInput(e.target.value)}
-                                    className="pl-9 font-medium"
-                                />
-                            </div>
-                        </div>
-                        <Button onClick={handleSaveBankroll} className="self-end">
-                            <Save className="mr-2 h-4 w-4"/>
-                            Salvar
-                        </Button>
-                     </div>
                 </div>
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                     <SummaryCard
-                        title="Banca Atual"
-                        value={summaryStats.currentBankroll}
-                        icon={Landmark}
-                        isCurrency
-                    />
-                    <SummaryCard
-                        title="Lucro/Prejuízo (Dia)"
-                        value={summaryStats.dailyProfit}
-                        icon={summaryStats.dailyProfit >= 0 ? TrendingUp : TrendingDown}
-                        isCurrency
-                        valueClassName={summaryStats.dailyProfit >= 0 ? "text-green-500" : "text-destructive"}
-                    />
-                     <SummaryCard
-                        title="Lucro/Prejuízo (Semana)"
-                        value={summaryStats.weeklyProfit}
-                        icon={summaryStats.weeklyProfit >= 0 ? TrendingUp : TrendingDown}
-                        isCurrency
-                        valueClassName={summaryStats.weeklyProfit >= 0 ? "text-green-500" : "text-destructive"}
-                    />
-                      <SummaryCard
-                        title="Lucro/Prejuízo (Mês)"
-                        value={summaryStats.monthlyProfit}
-                        icon={summaryStats.monthlyProfit >= 0 ? TrendingUp : TrendingDown}
-                        isCurrency
-                        valueClassName={summaryStats.monthlyProfit >= 0 ? "text-green-500" : "text-destructive"}
-                    />
+                     <SummaryCard title="Banca Inicial Total" value={summaryStats.totalInitialBankroll} icon={Landmark} isCurrency />
+                     <SummaryCard title="Banca Atual Total" value={summaryStats.currentBankroll} icon={Wallet} isCurrency />
+                     <SummaryCard title="Lucro/Prejuízo Total" value={summaryStats.allTimeProfit} icon={summaryStats.allTimeProfit >= 0 ? TrendingUp : TrendingDown} isCurrency valueClassName={summaryStats.allTimeProfit >= 0 ? "text-green-500" : "text-destructive"} />
+                     <SummaryCard title="Total de Apostas" value={bets.length} icon={Landmark} />
                 </div>
+            </div>
+
+             <div className="mb-8">
+                 <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-4 gap-4">
+                     <h3 className="text-2xl font-bold flex items-center gap-2">
+                        <Building className="w-7 h-7 text-primary" />
+                        Bancas por Casa
+                     </h3>
+                      <Button onClick={() => handleOpenBookmakerForm()} variant="outline">
+                        <PlusCircle className="mr-2"/> Adicionar Casa
+                    </Button>
+                </div>
+                {bookmakers.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        {bookmakers.map(bk => (
+                             <BookmakerCard 
+                                key={bk.id} 
+                                bookmaker={bk}
+                                bets={bets}
+                                onEdit={() => handleOpenBookmakerForm(bk)}
+                                onDelete={() => setBookmakerToDelete(bk)}
+                            />
+                        ))}
+                    </div>
+                ) : (
+                     <div className="text-center py-10 bg-muted rounded-lg col-span-full">
+                        <h3 className="text-xl font-bold">Nenhuma Casa de Apostas Cadastrada</h3>
+                        <p className="text-muted-foreground mt-2 mb-6">Adicione uma casa para começar a gerenciar suas bancas separadamente.</p>
+                        <Button onClick={() => handleOpenBookmakerForm()}>
+                            <PlusCircle className="mr-2"/>
+                            Adicionar Casa de Apostas
+                        </Button>
+                    </div>
+                )}
             </div>
 
             <div className="mb-8">
@@ -410,47 +431,71 @@ export default function BetsPage() {
                 <TabsContent value="lost">{renderBetList()}</TabsContent>
                 <TabsContent value="other">{renderBetList()}</TabsContent>
             </Tabs>
-        </div>
 
-        <Dialog open={isFormOpen} onOpenChange={isOpen => {
-            if(!isOpen) {
-                setIsFormOpen(false);
-                setBetToEdit(null);
-            }
-        }}>
-            <DialogContent className="max-w-2xl p-0">
-                <BetForm 
-                    onSave={handleSaveBet}
-                    betToEdit={betToEdit}
-                    onCancel={() => {
-                        setIsFormOpen(false);
-                        setBetToEdit(null);
-                    }}
-                />
-            </DialogContent>
-        </Dialog>
+            {/* Bet Form Dialog */}
+            <Dialog open={isBetFormOpen} onOpenChange={isOpen => {
+                if(!isOpen) { setIsBetFormOpen(false); setBetToEdit(null); }
+            }}>
+                <DialogContent className="max-w-2xl p-0">
+                    <BetForm 
+                        onSave={handleSaveBet}
+                        betToEdit={betToEdit}
+                        bookmakers={bookmakers}
+                        onCancel={() => { setIsBetFormOpen(false); setBetToEdit(null); }}
+                    />
+                </DialogContent>
+            </Dialog>
 
-        <AlertDialog open={!!betToDelete} onOpenChange={(isOpen) => !isOpen && setBetToDelete(null)}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                <AlertDialogTitle>
-                    <div className="flex items-center gap-2">
-                        <AlertTriangle className="text-destructive"/>
-                        Você tem certeza absoluta?
-                    </div>
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                    Essa ação não pode ser desfeita. Isso excluirá permanentemente a aposta no evento <strong className="text-foreground">"{betToDelete?.event}"</strong>.
-                </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={() => betToDelete && handleDeleteBet(betToDelete.id)}>
-                    Sim, excluir aposta
-                </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
+            {/* Bookmaker Form Dialog */}
+            <Dialog open={isBookmakerFormOpen} onOpenChange={isOpen => {
+                if (!isOpen) { setIsBookmakerFormOpen(false); setBookmakerToEdit(null); }
+            }}>
+                <DialogContent className="max-w-md p-0">
+                    <BookmakerForm
+                        onSave={handleSaveBookmaker}
+                        bookmakerToEdit={bookmakerToEdit}
+                        onCancel={() => { setIsBookmakerFormOpen(false); setBookmakerToEdit(null); }}
+                    />
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Bet Dialog */}
+            <AlertDialog open={!!betToDelete} onOpenChange={(isOpen) => !isOpen && setBetToDelete(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                    <AlertDialogTitle>
+                        <div className="flex items-center gap-2"> <AlertTriangle className="text-destructive"/> Você tem certeza? </div>
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Essa ação não pode ser desfeita. Isso excluirá permanentemente a aposta em <strong className="text-foreground">"{betToDelete?.event}"</strong>.
+                    </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => betToDelete && handleDeleteBet(betToDelete.id)}> Sim, excluir aposta </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Delete Bookmaker Dialog */}
+             <AlertDialog open={!!bookmakerToDelete} onOpenChange={(isOpen) => !isOpen && setBookmakerToDelete(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                    <AlertDialogTitle>
+                        <div className="flex items-center gap-2"> <AlertTriangle className="text-destructive"/> Tem certeza? </div>
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Isso excluirá permanentemente a casa de apostas <strong className="text-foreground">"{bookmakerToDelete?.name}"</strong> e todo o seu histórico. Essa ação não pode ser desfeita.
+                    </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => bookmakerToDelete && handleDeleteBookmaker(bookmakerToDelete.id)}> Sim, excluir casa </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </>
     )
 }
+
+    

@@ -3,7 +3,7 @@
 import type { Bet } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Edit, Trash2, MoreVertical, Calendar, TrendingUp, TrendingDown, Hourglass, DollarSign, ShieldCheck, List, GitCommitHorizontal, Star, Gift } from 'lucide-react';
+import { Edit, Trash2, MoreVertical, Calendar, TrendingUp, TrendingDown, Hourglass, DollarSign, ShieldCheck, List, GitCommitHorizontal, Star, Gift, Building } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
@@ -49,17 +49,20 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
   })();
 
   return (
-    <Card className="flex flex-col h-full overflow-hidden">
+    <Card className="flex flex-col h-full overflow-hidden border-l-4" style={{ borderLeftColor: statusInfo.color }}>
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start">
             <div className='flex-1'>
-                 <div className='flex items-center gap-2'>
+                 <div className='flex items-center gap-2 flex-wrap'>
                     {bet.type === 'surebet' && (
                         <Badge className="bg-teal-500 hover:bg-teal-600 border-transparent text-white gap-1.5">
                             <ShieldCheck className='w-4 h-4' /> Surebet
                         </Badge>
                     )}
                     <Badge variant="secondary">{bet.sport}</Badge>
+                    {bet.bookmaker && bet.type === 'single' && (
+                        <Badge variant="outline" className="gap-1.5"><Building className="w-3 h-3" /> {bet.bookmaker}</Badge>
+                    )}
                     {bet.earnedFreebetValue && bet.earnedFreebetValue > 0 && (
                          <TooltipProvider>
                             <Tooltip>
@@ -191,3 +194,5 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
     </Card>
   );
 }
+
+    

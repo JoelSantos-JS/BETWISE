@@ -8,7 +8,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import React from 'react';
 
-import type { Bet } from "@/lib/types";
+import type { Bet, Bookmaker } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,6 +46,7 @@ const singleBetSchema = baseBetSchema.extend({
   betType: z.string().min(3, "O tipo de aposta é obrigatório."),
   stake: z.coerce.number().min(0.01, "O valor apostado deve ser maior que zero."),
   odds: z.coerce.number().min(1.01, "As odds devem ser maiores que 1.00."),
+  bookmaker: z.string().min(1, "A casa de apostas é obrigatória."),
 });
 
 const surebetSchema = baseBetSchema.extend({
@@ -68,6 +69,7 @@ interface BetFormProps {
   onSave: (bet: Omit<Bet, 'id'>) => void;
   betToEdit?: Bet | null;
   onCancel: () => void;
+  bookmakers: Bookmaker[];
 }
 
 const calculateSurebet = (subBets: z.infer<typeof subBetSchema>[] | undefined) => {
@@ -105,7 +107,7 @@ const calculateSurebet = (subBets: z.infer<typeof subBetSchema>[] | undefined) =
     return { totalStake, guaranteedProfit, profitPercentage };
 };
 
-export function BetForm({ onSave, betToEdit, onCancel }: BetFormProps) {
+export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProps) {
   const form = useForm<z.infer<typeof betSchema>>({
     resolver: zodResolver(betSchema),
     defaultValues: betToEdit ? (betToEdit.type === 'single' ? {
@@ -119,6 +121,7 @@ export function BetForm({ onSave, betToEdit, onCancel }: BetFormProps) {
         betType: betToEdit.betType || '',
         stake: betToEdit.stake || 0,
         odds: betToEdit.odds || 1.01,
+        bookmaker: betToEdit.bookmaker || '',
     } : {
         type: 'surebet' as const,
         sport: betToEdit.sport,
@@ -142,10 +145,11 @@ export function BetForm({ onSave, betToEdit, onCancel }: BetFormProps) {
         date: new Date(),
         notes: "",
         earnedFreebetValue: 0,
+        bookmaker: bookmakers.length > 0 ? bookmakers[0].name : '',
     },
   });
 
-  const { control, handleSubmit, watch, formState: { isSubmitting } } = form;
+  const { control, handleSubmit, watch, formState: { isSubmitting, errors } } = form;
   const { fields, append, remove } = useFieldArray({ control, name: "subBets" as never});
 
   const watchedType = watch("type");
@@ -253,6 +257,18 @@ export function BetForm({ onSave, betToEdit, onCancel }: BetFormProps) {
                                     </FormItem>
                                 )} />
                             </div>
+                             <FormField control={control} name="bookmaker" render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Casa de Apostas</FormLabel>
+                                     <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <FormControl><SelectTrigger><SelectValue placeholder="Selecione a casa" /></SelectTrigger></FormControl>
+                                        <SelectContent>
+                                            {bookmakers.map((bk) => <SelectItem key={bk.id} value={bk.name}>{bk.name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )} />
                             <FormField control={control} name="earnedFreebetValue" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Ganha Freebet de (R$)? (Opcional)</FormLabel>
@@ -409,3 +425,5 @@ export function BetForm({ onSave, betToEdit, onCancel }: BetFormProps) {
     </div>
   );
 }
+
+    

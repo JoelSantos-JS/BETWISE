@@ -7,6 +7,12 @@ export interface SubBet {
     isFreebet?: boolean;
 }
 
+export interface Bookmaker {
+    id: string;
+    name: string;
+    initialBankroll: number;
+}
+
 export interface Bet {
   id: string;
   type: 'single' | 'surebet';
@@ -18,6 +24,7 @@ export interface Bet {
   earnedFreebetValue?: number | null; // Valor da freebet ganha com esta aposta
 
   // For 'single' bets
+  bookmaker?: string | null; // Associated bookmaker
   betType?: string | null;
   stake?: number | null;
   odds?: number | null;
@@ -28,3 +35,5 @@ export interface Bet {
   guaranteedProfit?: number | null;
   profitPercentage?: number | null;
 }
+
+    
