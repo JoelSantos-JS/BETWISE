@@ -33,7 +33,6 @@ import { Label } from '@/components/ui/label';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc, addDoc, Timestamp, getDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/auth-context';
-import { MainNav } from '@/components/main-nav';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 
@@ -295,7 +294,6 @@ export default function BetsPage() {
                     </p>
                 </div>
                 <div className='flex items-center gap-4'>
-                    <MainNav />
                     <Button size="lg" onClick={() => handleOpenForm()} className="w-full md:w-auto">
                         <PlusCircle className="mr-2"/>
                         Adicionar Aposta
