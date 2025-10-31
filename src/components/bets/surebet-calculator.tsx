@@ -13,15 +13,14 @@ type OddInput = {
   value: string;
 };
 
-type SurebetResult = {
-  isSurebet: boolean;
+type CalculationResult = {
   stakes: number[];
   lucro: number;
   roi: number;
   retornos: number[];
 };
 
-function calculateSurebet(oddInputs: OddInput[], totalStake: number) {
+function calculateDistribution(oddInputs: OddInput[], totalStake: number): CalculationResult | null {
   const odds = oddInputs.map(input => parseFloat(input.value)).filter(odd => !isNaN(odd) && odd > 0);
   
   if (odds.length < 2 || totalStake <= 0) {
@@ -30,17 +29,13 @@ function calculateSurebet(oddInputs: OddInput[], totalStake: number) {
 
   const S = odds.reduce((sum, odd) => sum + 1 / odd, 0);
 
-  if (S >= 1) {
-    return { isSurebet: false, stakes: [], lucro: 0, roi: 0, retornos: [] };
-  }
-
   const stakes = odds.map(odd => (totalStake / odd) / S);
   const retornos = stakes.map((stake, i) => stake * odds[i]);
-  const lucro = retornos[0] - totalStake;
+  // Use a média dos retornos, pois eles deveriam ser teoricamente iguais
+  const lucro = (retornos[0] || 0) - totalStake;
   const roi = (lucro / totalStake) * 100;
 
   return {
-    isSurebet: true,
     stakes,
     lucro,
     roi,
@@ -68,7 +63,9 @@ export function SurebetCalculator() {
     setOddInputs(oddInputs.map(odd => (odd.id === id ? { ...odd, value: newValue } : odd)));
   };
 
-  const calculation = useMemo(() => calculateSurebet(oddInputs, parseFloat(totalStake)), [oddInputs, totalStake]);
+  const calculation = useMemo(() => calculateDistribution(oddInputs, parseFloat(totalStake)), [oddInputs, totalStake]);
+
+  const isSurebet = calculation ? calculation.roi > 0 : false;
 
   return (
     <Card className="bg-card/50 border-dashed">
@@ -120,23 +117,19 @@ export function SurebetCalculator() {
               <CardTitle className="text-lg">Resultado da Simulação</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-                {calculation.isSurebet ? (
-                     <div className="md:col-span-3 p-4 bg-green-500/5 border border-green-500/20 rounded-lg flex items-center gap-3">
-                        <ShieldCheck className="w-6 h-6 text-green-500" />
-                        <div>
-                            <h3 className="font-bold text-green-500">SUREBET CONFIRMADA!</h3>
-                            <p className="text-sm text-muted-foreground">Esta operação garante lucro, independentemente do resultado.</p>
-                        </div>
+                <div className={cn("md:col-span-3 p-4 border rounded-lg flex items-center gap-3",
+                    isSurebet ? "bg-green-500/5 border-green-500/20" : "bg-red-500/5 border-red-500/20"
+                )}>
+                    {isSurebet ? <ShieldCheck className="w-6 h-6 text-green-500" /> : <AlertCircle className="w-6 h-6 text-red-500" />}
+                    <div>
+                        <h3 className={cn("font-bold", isSurebet ? "text-green-500" : "text-red-500")}>
+                            {isSurebet ? "LUCRO GARANTIDO (SUREBET)" : "PREJUÍZO CALCULADO"}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                            {isSurebet ? "Esta operação garante lucro, independentemente do resultado." : "Com as odds atuais, a operação resultará em prejuízo."}
+                        </p>
                     </div>
-                ) : (
-                     <div className="md:col-span-3 p-4 bg-red-500/5 border border-red-500/20 rounded-lg flex items-center gap-3">
-                        <AlertCircle className="w-6 h-6 text-red-500" />
-                        <div>
-                            <h3 className="font-bold text-red-500">NÃO É UMA SUREBET</h3>
-                            <p className="text-sm text-muted-foreground">Com as odds atuais, não há lucro garantido.</p>
-                        </div>
-                    </div>
-                )}
+                </div>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {calculation.stakes.map((stake, i) => (
                         <div key={i} className='p-4 bg-background rounded-lg'>
@@ -145,22 +138,24 @@ export function SurebetCalculator() {
                         </div>
                     ))}
                  </div>
-                 {calculation.isSurebet && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className='p-4 bg-background rounded-lg'>
-                            <p className="text-sm text-muted-foreground flex items-center gap-2 mb-1"><DollarSign /> Lucro Garantido</p>
-                            <p className="text-2xl font-bold text-green-500">{calculation.lucro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                        </div>
-                         <div className='p-4 bg-background rounded-lg'>
-                            <p className="text-sm text-muted-foreground flex items-center gap-2 mb-1"><Percent /> Retorno sobre Investimento (ROI)</p>
-                            <p className="text-2xl font-bold text-green-500">{calculation.roi.toFixed(2)}%</p>
-                        </div>
-                         <div className='p-4 bg-background rounded-lg'>
-                            <p className="text-sm text-muted-foreground flex items-center gap-2 mb-1"><ShieldCheck /> Retorno Total</p>
-                            <p className="text-2xl font-bold">{calculation.retornos[0]?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                        </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className='p-4 bg-background rounded-lg'>
+                        <p className="text-sm text-muted-foreground flex items-center gap-2 mb-1"><DollarSign /> Lucro/Prejuízo</p>
+                        <p className={cn("text-2xl font-bold", isSurebet ? "text-green-500" : "text-destructive")}>
+                            {calculation.lucro.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </p>
                     </div>
-                 )}
+                        <div className='p-4 bg-background rounded-lg'>
+                        <p className="text-sm text-muted-foreground flex items-center gap-2 mb-1"><Percent /> Retorno sobre Investimento (ROI)</p>
+                        <p className={cn("text-2xl font-bold", isSurebet ? "text-green-500" : "text-destructive")}>
+                            {calculation.roi.toFixed(2)}%
+                        </p>
+                    </div>
+                        <div className='p-4 bg-background rounded-lg'>
+                        <p className="text-sm text-muted-foreground flex items-center gap-2 mb-1"><ShieldCheck /> Retorno Total</p>
+                        <p className="text-2xl font-bold">{calculation.retornos[0]?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                    </div>
+                </div>
             </CardContent>
           </Card>
         )}
