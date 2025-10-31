@@ -3,6 +3,7 @@ import Image from "next/image";
 import { MainNav } from "@/components/main-nav";
 import { UserNav } from "@/components/user-nav";
 import Link from 'next/link';
+import { BackgroundFlames } from "@/components/background-flames";
 
 export default function DashboardLayout({
   children,
@@ -11,6 +12,15 @@ export default function DashboardLayout({
 }) {
   return (
     <AuthProvider>
+      <style>{`
+          html,body{height:100%;margin:0;overflow:hidden}
+          .vignette{position:fixed;inset:0;pointer-events:none;
+            background: radial-gradient(70% 90% at 50% 65%, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 55%, rgba(0,0,0,.45) 100%);
+            mix-blend-mode:multiply}
+        `}</style>
+      <BackgroundFlames />
+      <div className="vignette"></div>
+      <div style={{position: 'relative', zIndex: 1, height: '100vh', overflowY: 'auto'}}>
         <div className="flex-col md:flex">
         <div className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-10">
             <div className="flex h-16 items-center px-4 md:px-8">
@@ -30,6 +40,7 @@ export default function DashboardLayout({
             {children}
         </div>
         </div>
+      </div>
     </AuthProvider>
   );
 }
