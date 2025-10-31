@@ -189,27 +189,34 @@ useEffect(() => {
         let profit = 0;
 
         if (watchedOutcomeScenario === 'double_green') {
-            // Sum of all returns minus the total money invested
-             profit = (watchedSubBets || []).reduce((acc, bet) => {
+            // Correct logic: Sum of all returns minus the total money invested
+             const totalReturn = (watchedSubBets || []).reduce((acc, bet) => {
                 const betReturn = bet.isFreebet ? (bet.stake * (bet.odds - 1)) : (bet.stake * bet.odds);
                 return acc + betReturn;
-            }, 0) - totalStake;
+            }, 0);
+            profit = totalReturn - totalStake;
 
         } else if (watchedOutcomeScenario === 'pa_hedge') {
-            if (hedgeOdd && hedgeOdd > 1 && totalStake > 0) {
-                 // The profit from the P.A. hedge is the return from the hedge bet, minus the cost of the other (losing) legs of the original bet.
-                // We assume the P.A. bet itself was a "wash" as its return covered its own stake.
-                
-                // Find the stake of the original bet that was NOT the P.A. bet. Let's assume P.A. is always on bet365 for this logic.
-                const nonPaStakes = (watchedSubBets || [])
-                    .filter(b => b.bookmaker.toLowerCase() !== 'bet365')
-                    .reduce((acc, b) => acc + b.stake, 0);
+             if (hedgeOdd && hedgeOdd > 1 && totalStake > 0) {
+                 // Correct logic for PA Hedge
+                // 1. Find the bet that was paid out early (assume it's the first one for simplicity, user should manage this)
+                const paBet = (watchedSubBets || [])[0];
+                if (paBet) {
+                    const paReturn = paBet.isFreebet ? paBet.stake * (paBet.odds - 1) : paBet.stake * paBet.odds;
 
-                // The hedge bet return, minus the lost stakes.
-                // The hedge stake is the totalStake of the original operation
-                const hedgeReturn = (totalStake / hedgeOdd) * (hedgeOdd - 1);
-                
-                profit = hedgeReturn - nonPaStakes;
+                    // 2. The hedge stake is the total initial investment
+                    const hedgeStake = totalStake;
+                    const hedgeReturn = hedgeStake * (hedgeOdd);
+                    
+                    // 3. The total cost is all initial stakes + the hedge stake.
+                    const totalCost = totalStake + hedgeStake;
+                    
+                    // 4. The total return is the P.A. return + the hedge return.
+                    const finalTotalReturn = paReturn + hedgeReturn;
+                    
+                    // 5. Final profit
+                    profit = finalTotalReturn - totalCost;
+                }
             }
         } else { // standard
             profit = surebetCalculations.guaranteedProfit;
