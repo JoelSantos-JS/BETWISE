@@ -35,11 +35,12 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
   const scenarioInfo = bet.outcomeScenario ? scenarioMap[bet.outcomeScenario] : null;
   
   const profit = (() => {
-    // Se o lucro final foi inserido manualmente, ele tem prioridade
+    // Se o lucro final (realizedProfit) foi inserido manualmente, ele tem prioridade MÁXIMA.
     if (bet.realizedProfit !== null && bet.realizedProfit !== undefined) {
       return bet.realizedProfit;
     }
     
+    // Se não há lucro real, calcula com base no status e tipo
     if (bet.status !== 'won' && bet.status !== 'lost') return null;
 
     if (bet.type === 'single') {
@@ -51,8 +52,11 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
     }
 
     if ((bet.type === 'surebet' || bet.type === 'pa_surebet')) {
+       // Se o status for perdido, a perda é o total apostado
+       if (bet.status === 'lost') {
+         return -(bet.totalStake ?? 0);
+       }
        // Para surebets ganhas, o lucro é o lucro garantido calculado.
-       // Para perdidas (cenário que não deveria acontecer numa surebet perfeita), mostra o prejuízo máximo.
        return bet.guaranteedProfit ?? null;
     }
     
