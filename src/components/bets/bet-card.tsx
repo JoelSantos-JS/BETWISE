@@ -3,7 +3,7 @@
 import type { Bet } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Edit, Trash2, MoreVertical, Calendar, TrendingUp, TrendingDown, Hourglass, DollarSign, ShieldCheck, List, GitCommitHorizontal, Star, Gift, Building } from 'lucide-react';
+import { Edit, Trash2, MoreVertical, Calendar, TrendingUp, TrendingDown, Hourglass, DollarSign, ShieldCheck, List, GitCommitHorizontal, Star, Gift, Building, Target } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
@@ -38,7 +38,7 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
       return 0;
     }
 
-    if (bet.type === 'surebet') {
+    if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
       // In a surebet, the profit is guaranteed if one leg wins, regardless of which one.
       // A "loss" status would imply an edge case like all legs being void or a miscalculation.
       // We still show the guaranteed profit, as that's the intended outcome.
@@ -57,6 +57,11 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
                     {bet.type === 'surebet' && (
                         <Badge className="bg-teal-500 hover:bg-teal-600 border-transparent text-white gap-1.5">
                             <ShieldCheck className='w-4 h-4' /> Surebet
+                        </Badge>
+                    )}
+                     {bet.type === 'pa_surebet' && (
+                        <Badge className="bg-orange-500 hover:bg-orange-600 border-transparent text-white gap-1.5">
+                            <Target className='w-4 h-4' /> P.A. Surebet
                         </Badge>
                     )}
                     <Badge variant="secondary">{bet.sport}</Badge>
@@ -185,7 +190,7 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
                 <statusInfo.icon className="w-4 h-4" />
                 <span>{statusInfo.label}</span>
                 {profit !== null && (
-                     <span className={cn("font-bold", profit < 0 && 'text-red-300', profit > 0 && bet.type === 'surebet' && 'text-green-300')}>
+                     <span className={cn("font-bold", profit < 0 && 'text-red-300', profit > 0 && (bet.type === 'surebet' || bet.type === 'pa_surebet') && 'text-green-300')}>
                         ({profit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})
                     </span>
                 )}
@@ -194,5 +199,3 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
     </Card>
   );
 }
-
-    

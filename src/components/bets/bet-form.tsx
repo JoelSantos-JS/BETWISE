@@ -3,7 +3,7 @@
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, ShieldCheck, Trash2, PlusCircle, Star } from "lucide-react";
+import { Loader2, ShieldCheck, Trash2, PlusCircle, Star, Target } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import React from 'react';
@@ -59,9 +59,18 @@ const surebetSchema = baseBetSchema.extend({
   profitPercentage: z.number().optional(),
 });
 
+const paSurebetSchema = baseBetSchema.extend({
+  type: z.literal('pa_surebet'),
+  subBets: z.array(subBetSchema).min(2, "Uma P.A. Surebet deve ter pelo menos 2 apostas."),
+  totalStake: z.number().optional(),
+  guaranteedProfit: z.number().optional(),
+  profitPercentage: z.number().optional(),
+});
+
 const betSchema = z.discriminatedUnion("type", [
     singleBetSchema,
-    surebetSchema
+    surebetSchema,
+    paSurebetSchema,
 ]);
 
 const sportOptions = ["Futebol", "Basquete", "Tênis", "Vôlei", "Futebol Americano", "MMA", "E-Sports", "Outro"];
@@ -125,7 +134,7 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
         odds: betToEdit.odds || 1.01,
         bookmaker: betToEdit.bookmaker || '',
     } : {
-        type: 'surebet' as const,
+        type: (betToEdit.type || 'surebet') as 'surebet' | 'pa_surebet',
         sport: betToEdit.sport,
         event: betToEdit.event,
         date: new Date(betToEdit.date),
@@ -158,7 +167,7 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
   const watchedSubBets = watch("subBets");
 
   const surebetCalculations = React.useMemo(() => {
-    if (watchedType !== 'surebet') return { totalStake: 0, guaranteedProfit: 0, profitPercentage: 0 };
+    if (watchedType !== 'surebet' && watchedType !== 'pa_surebet') return { totalStake: 0, guaranteedProfit: 0, profitPercentage: 0 };
     // @ts-ignore
     return calculateSurebet(watchedSubBets);
   }, [watchedType, watchedSubBets]);
@@ -166,7 +175,7 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
   const onSubmit = (data: z.infer<typeof betSchema>) => {
     let finalData: Omit<Bet, 'id'> = JSON.parse(JSON.stringify(data));
 
-    if (finalData.type === 'surebet' && finalData.subBets) {
+    if ((finalData.type === 'surebet' || finalData.type === 'pa_surebet') && finalData.subBets) {
         const { totalStake, guaranteedProfit, profitPercentage } = calculateSurebet(finalData.subBets);
         finalData.totalStake = totalStake;
         finalData.guaranteedProfit = guaranteedProfit;
@@ -182,8 +191,8 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
   };
   
   const handleTabChange = (value: string) => {
-    if (value === 'single' || value === 'surebet') {
-      setValue('type', value);
+    if (value === 'single' || value === 'surebet' || value === 'pa_surebet') {
+      setValue('type', value as 'single' | 'surebet' | 'pa_surebet');
     }
   };
 
@@ -202,9 +211,10 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
                 <div className="space-y-4 px-6 py-2">
                     
                     <Tabs defaultValue={watchedType} onValueChange={handleTabChange} className="w-full">
-                        <TabsList className="grid w-full grid-cols-2">
+                        <TabsList className="grid w-full grid-cols-3">
                             <TabsTrigger value="single">Aposta Simples</TabsTrigger>
                             <TabsTrigger value="surebet" className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-teal-500"/> Surebet</TabsTrigger>
+                             <TabsTrigger value="pa_surebet" className="flex items-center gap-2"><Target className="w-4 h-4 text-orange-500"/> P.A. Surebet</TabsTrigger>
                         </TabsList>
                         
                         <div className="grid grid-cols-2 gap-4 mt-4">
@@ -342,6 +352,75 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
                                 </FormItem>
                             )} />
                         </TabsContent>
+
+                        <TabsContent value="pa_surebet" className="space-y-4 mt-4">
+                             <h3 className="text-md font-medium mb-2">Apostas da P.A. Surebet</h3>
+                            <div className="space-y-4">
+                                {fields.map((item, index) => (
+                                    <div key={item.id} className="p-4 bg-muted/50 rounded-lg space-y-3 relative">
+                                        <FormField control={control} name={`subBets.${index}.bookmaker`} render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Casa de Apostas / Exchange</FormLabel>
+                                                <FormControl><Input placeholder="Ex: Bet365 ou Betfair" {...field} /></FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )} />
+                                        <FormField control={control} name={`subBets.${index}.betType`} render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Tipo de Aposta</FormLabel>
+                                                <FormControl><Input placeholder="Ex: 'Vitória Time A' ou 'Lay Empate (contra)'" {...field} /></FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )} />
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <FormField control={control} name={`subBets.${index}.odds`} render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Odds</FormLabel>
+                                                    <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                            <FormField control={control} name={`subBets.${index}.stake`} render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Aposta (R$)</FormLabel>
+                                                    <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )} />
+                                        </div>
+                                         <FormField
+                                            control={control}
+                                            name={`subBets.${index}.isFreebet`}
+                                            render={({ field }) => (
+                                                <FormItem className="flex flex-row items-center space-x-2 space-y-0 mt-4">
+                                                    <FormControl>
+                                                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                                                    </FormControl>
+                                                    <FormLabel className="text-sm font-normal flex items-center gap-1">
+                                                        <Star className="w-4 h-4 text-yellow-500" /> É uma Aposta Grátis (Freebet)?
+                                                    </FormLabel>
+                                                </FormItem>
+                                            )}
+                                        />
+                                         {fields.length > 2 && (
+                                            <Button type="button" variant="destructive" size="icon" className="absolute top-2 right-2" onClick={() => remove(index)}>
+                                                <Trash2 className="w-4 h-4"/>
+                                            </Button>
+                                         )}
+                                    </div>
+                                ))}
+                            </div>
+                            <Button type="button" variant="outline" size="sm" className="mt-4" onClick={() => append({ id: new Date().toISOString() , bookmaker: '', betType: '', odds: 1.5, stake: 0, isFreebet: false })}>
+                                <PlusCircle className="mr-2"/> Adicionar Aposta
+                            </Button>
+                             <FormField control={control} name="earnedFreebetValue" render={({ field }) => (
+                                <FormItem className="pt-4">
+                                    <FormLabel>Ganha Freebet de (R$)? (Opcional)</FormLabel>
+                                    <FormControl><Input type="number" step="0.01" value={field.value || ''} onChange={(e) => field.onChange(e.target.value === '' ? null : Number(e.target.value))} placeholder="Valor da freebet que esta aposta qualifica" /></FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )} />
+                        </TabsContent>
                     </Tabs>
                     
 
@@ -391,7 +470,7 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
                 </div>
             </ScrollArea>
              <DialogFooter className="p-6 pt-4 flex-col md:flex-row md:justify-between items-start md:items-center border-t gap-4">
-                 {watchedType === 'surebet' && (
+                 {(watchedType === 'surebet' || watchedType === 'pa_surebet') && (
                     <div className="flex flex-wrap gap-x-4 gap-y-2 items-center text-sm">
                         <div>
                             <span className="text-muted-foreground">Total Apostado:</span>

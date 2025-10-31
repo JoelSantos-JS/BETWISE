@@ -35,7 +35,7 @@ export function BetPerformanceChart({ data, isLoading }: BetPerformanceChartProp
                 acc[bet.sport].profit -= bet.stake;
             }
             if(bet.stake) acc[bet.sport].totalStaked += bet.stake;
-        } else if (bet.type === 'surebet') {
+        } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
              if (bet.status === 'won' && bet.guaranteedProfit) {
                 acc[bet.sport].profit += bet.guaranteedProfit;
             }

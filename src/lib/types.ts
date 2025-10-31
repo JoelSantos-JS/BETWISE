@@ -15,7 +15,7 @@ export interface Bookmaker {
 
 export interface Bet {
   id: string;
-  type: 'single' | 'surebet';
+  type: 'single' | 'surebet' | 'pa_surebet';
   sport: string;
   event: string;
   date: Date;
@@ -29,11 +29,9 @@ export interface Bet {
   stake?: number | null;
   odds?: number | null;
   
-  // For 'surebet'
+  // For 'surebet' or 'pa_surebet'
   subBets?: SubBet[] | null;
   totalStake?: number | null;
   guaranteedProfit?: number | null;
   profitPercentage?: number | null;
 }
-
-    

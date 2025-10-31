@@ -119,7 +119,7 @@ export default function BetsPage() {
                 const odds = bet.odds ?? 0;
                 if (bet.status === 'won') return acc + (stake * odds) - stake;
                 if (bet.status === 'lost') return acc - stake;
-             } else if (bet.type === 'surebet') {
+             } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
                  // Profit is calculated from the winning leg, not just the guaranteed one, for total P/L
                  const wonSubBet = bet.subBets?.find(sb => sb.id.endsWith(bet.status)); // Simplified assumption
                  if (bet.status === 'won' && bet.guaranteedProfit) return acc + bet.guaranteedProfit;
@@ -232,7 +232,11 @@ export default function BetsPage() {
         if (!bookmaker) return;
         
         // Find bets associated with this bookmaker
-        const associatedBets = bets.filter(bet => bet.bookmaker === bookmaker.name);
+        const associatedBets = bets.filter(bet => {
+            if(bet.type === 'single') return bet.bookmaker === bookmaker.name;
+            if(bet.type === 'surebet' || bet.type === 'pa_surebet') return bet.subBets?.some(sb => sb.bookmaker === bookmaker.name);
+            return false;
+        });
         
         if (associatedBets.length > 0) {
             toast({ variant: 'destructive', title: 'Ação Bloqueada', description: 'Não é possível excluir uma casa que possui apostas associadas.' });
@@ -264,7 +268,7 @@ export default function BetsPage() {
                         const stake = bet.stake ?? 0;
                         const odds = bet.odds ?? 0;
                         profit = bet.status === 'won' ? (stake * odds) - stake : -stake;
-                    } else if (bet.type === 'surebet') {
+                    } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
                         profit = bet.guaranteedProfit ?? 0;
                     }
                 }
@@ -273,7 +277,7 @@ export default function BetsPage() {
                     'Data': new Date(bet.date).toLocaleDateString('pt-BR'),
                     'Esporte': bet.sport,
                     'Evento': bet.event,
-                    'Tipo': bet.type === 'single' ? 'Simples' : 'Surebet',
+                    'Tipo': bet.type === 'single' ? 'Simples' : (bet.type === 'surebet' ? 'Surebet' : 'P.A. Surebet'),
                     'Seleção/Mercado': bet.type === 'single' ? bet.betType : bet.subBets?.map(sb => `${sb.bookmaker}: ${sb.betType}`).join(' | '),
                     'Casa(s)': bet.type === 'single' ? bet.bookmaker : bet.subBets?.map(sb => sb.bookmaker).join(', '),
                     'Stake Total': bet.type === 'single' ? bet.stake : bet.totalStake,
