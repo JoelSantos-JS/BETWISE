@@ -146,7 +146,7 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
         date: new Date(betToEdit.date),
         status: betToEdit.status,
         notes: betToEdit.notes,
-        earnedFreebetValue: betToedit.earnedFreebetValue || 0,
+        earnedFreebetValue: betToEdit.earnedFreebetValue || 0,
         realizedProfit: betToEdit.realizedProfit,
         subBets: betToEdit.subBets || [],
          totalStake: betToEdit.totalStake || undefined,
@@ -189,50 +189,27 @@ useEffect(() => {
         let profit = 0;
 
         if (watchedOutcomeScenario === 'double_green') {
-            profit = (watchedSubBets || []).reduce((acc, bet) => {
+            // Sum of all returns minus the total money invested
+             profit = (watchedSubBets || []).reduce((acc, bet) => {
                 const betReturn = bet.isFreebet ? (bet.stake * (bet.odds - 1)) : (bet.stake * bet.odds);
                 return acc + betReturn;
             }, 0) - totalStake;
+
         } else if (watchedOutcomeScenario === 'pa_hedge') {
             if (hedgeOdd && hedgeOdd > 1 && totalStake > 0) {
-                // Assume the PA bet is the one with the highest stake (usually) or identify it.
-                // For simplicity, let's find the bet that qualified for P.A.
-                const paBet = watchedSubBets?.find(b => b.bookmaker.toLowerCase().includes('bet365')); // Simple assumption
+                 // The profit from the P.A. hedge is the return from the hedge bet, minus the cost of the other (losing) legs of the original bet.
+                // We assume the P.A. bet itself was a "wash" as its return covered its own stake.
                 
-                // Let's assume the user wants to hedge the *entire initial operation stake*
-                const hedgeStake = totalStake;
-                
-                // Return from the hedge bet
-                const hedgeReturn = hedgeStake / hedgeOdd;
+                // Find the stake of the original bet that was NOT the P.A. bet. Let's assume P.A. is always on bet365 for this logic.
+                const nonPaStakes = (watchedSubBets || [])
+                    .filter(b => b.bookmaker.toLowerCase() !== 'bet365')
+                    .reduce((acc, b) => acc + b.stake, 0);
 
-                // Profit from the P.A. bet (it was paid out in full)
-                const paBetReturn = paBet ? (paBet.stake * paBet.odds) : 0;
+                // The hedge bet return, minus the lost stakes.
+                // The hedge stake is the totalStake of the original operation
+                const hedgeReturn = (totalStake / hedgeOdd) * (hedgeOdd - 1);
                 
-                // We need to find the total profit.
-                // 1. The P.A. bet was paid out.
-                // 2. We made a hedge bet.
-                // The total profit is the return from the hedge bet MINUS the cost of the other legs of the original bet.
-                
-                // The correct logic is simpler:
-                // We invested 'totalStake'.
-                // The P.A. leg paid out, let's say its return is 'paReturn'.
-                // We then place a hedge bet. The amount we need to stake on the hedge to guarantee a profit is a separate calculation.
-                // A simpler way to model this is:
-                // We got the PA return. Then we made a new bet.
-                // Let's use the user's logic: Bet TotalStake / hedgeOdd.
-                const hedgeProfit = (totalStake / hedgeOdd) * (hedgeOdd - 1);
-                
-                // The user's request is to find the net profit.
-                // You get a payout from the P.A. bet.
-                // You also now have a winning hedge bet.
-                // Your total profit is (PA_Return + Hedge_Return) - Total_Stakes_Invested.
-                
-                const otherStakes = (watchedSubBets?.filter(b => b.id !== paBet?.id).reduce((acc, b) => acc + b.stake, 0)) || 0;
-                
-                // Correct calculation: The return from the hedge bet minus the money lost on the other legs.
-                const profitFromHedge = (totalStake / hedgeOdd) * (hedgeOdd - 1);
-                profit = profitFromHedge - otherStakes;
-
+                profit = hedgeReturn - nonPaStakes;
             }
         } else { // standard
             profit = surebetCalculations.guaranteedProfit;
@@ -628,3 +605,5 @@ useEffect(() => {
     </div>
   );
 }
+
+    
