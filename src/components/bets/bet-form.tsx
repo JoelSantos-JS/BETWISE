@@ -189,33 +189,25 @@ useEffect(() => {
         let profit = 0;
 
         if (watchedOutcomeScenario === 'double_green') {
-            // Correct logic: Sum of all returns minus the total money invested
-             const totalReturn = (watchedSubBets || []).reduce((acc, bet) => {
-                const betReturn = bet.isFreebet ? (bet.stake * (bet.odds - 1)) : (bet.stake * bet.odds);
-                return acc + betReturn;
+            const totalNetProfit = (watchedSubBets || []).reduce((acc, bet) => {
+                const netProfit = bet.stake * (bet.odds - 1);
+                return acc + netProfit;
             }, 0);
-            profit = totalReturn - totalStake;
+            profit = totalNetProfit;
 
         } else if (watchedOutcomeScenario === 'pa_hedge') {
-             if (hedgeOdd && hedgeOdd > 1 && totalStake > 0) {
-                 // Correct logic for PA Hedge
-                // 1. Find the bet that was paid out early (assume it's the first one for simplicity, user should manage this)
+            if (hedgeOdd && hedgeOdd > 1 && totalStake > 0) {
                 const paBet = (watchedSubBets || [])[0];
+                const otherBets = (watchedSubBets || []).slice(1);
+                
                 if (paBet) {
-                    const paReturn = paBet.isFreebet ? paBet.stake * (paBet.odds - 1) : paBet.stake * paBet.odds;
-
-                    // 2. The hedge stake is the total initial investment
-                    const hedgeStake = totalStake;
-                    const hedgeReturn = hedgeStake * (hedgeOdd);
+                    const paBetNetProfit = paBet.stake * (paBet.odds - 1);
+                    const hedgeStake = totalStake; // The coverage bet uses the total initial investment
+                    const hedgeNetProfit = hedgeStake * (hedgeOdd - 1);
                     
-                    // 3. The total cost is all initial stakes + the hedge stake.
-                    const totalCost = totalStake + hedgeStake;
+                    const otherBetsCost = otherBets.reduce((acc, b) => acc + (b.isFreebet ? 0 : b.stake), 0);
                     
-                    // 4. The total return is the P.A. return + the hedge return.
-                    const finalTotalReturn = paReturn + hedgeReturn;
-                    
-                    // 5. Final profit
-                    profit = finalTotalReturn - totalCost;
+                    profit = paBetNetProfit + hedgeNetProfit - otherBetsCost;
                 }
             }
         } else { // standard
@@ -612,5 +604,3 @@ useEffect(() => {
     </div>
   );
 }
-
-    
