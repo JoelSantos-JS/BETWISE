@@ -146,7 +146,7 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
         date: new Date(betToEdit.date),
         status: betToEdit.status,
         notes: betToEdit.notes,
-        earnedFreebetValue: betToEdit.earnedFreebetValue || 0,
+        earnedFreebetValue: betToedit.earnedFreebetValue || 0,
         realizedProfit: betToEdit.realizedProfit,
         subBets: betToEdit.subBets || [],
          totalStake: betToEdit.totalStake || undefined,
@@ -183,36 +183,63 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
     return calculateSurebet(watchedSubBets);
   }, [watchedType, watchedSubBets]);
 
-  useEffect(() => {
-      if (betToEdit && watchedType === 'pa_surebet' && watchedStatus === 'won') {
-          const { totalStake, potentialReturns } = surebetCalculations;
-          let profit = 0;
-          if (watchedOutcomeScenario === 'double_green') {
-              profit = (watchedSubBets || []).reduce((acc, bet) => {
-                  const betReturn = bet.isFreebet ? (bet.stake * (bet.odds - 1)) : (bet.stake * bet.odds);
-                  return acc + betReturn;
-              }, 0) - totalStake;
-          } else if (watchedOutcomeScenario === 'pa_hedge') {
-              if (hedgeOdd && hedgeOdd > 1) {
-                  const paBet = watchedSubBets?.find(b => b.bookmaker.toLowerCase().includes('bet365')); // Simple assumption
-                  const hedgeStake = paBet?.stake || 0;
-                  const profitFromHedge = (hedgeStake / hedgeOdd) * (hedgeOdd - 1);
-                  const costOfHedge = hedgeStake;
-                  // Lucro = (Retorno do P.A.) - (Custo da aposta de cobertura) + (ganho líquido da aposta de cobertura se ela ganhar)
-                  // Simplified: Return of the Hedge bet - Cost of the Hedge bet
-                  const paReturn = (paBet?.stake || 0) * (paBet?.odds || 0);
-                  const otherStakes = (watchedSubBets?.filter(b => b.id !== paBet?.id).reduce((acc, b) => acc + b.stake, 0)) || 0;
-                  
-                  // Lucro = (retorno da aposta P.A.) + (retorno da aposta hedge) - (custo total)
-                  const hedgeReturn = (totalStake / hedgeOdd);
-                  profit = (paReturn + hedgeReturn) - totalStake;
-              }
-          } else { // standard
-              profit = surebetCalculations.guaranteedProfit;
-          }
-          setValue('realizedProfit', profit);
-      }
-  }, [watchedOutcomeScenario, watchedStatus, watchedType, betToEdit, surebetCalculations, setValue, watchedSubBets, hedgeOdd]);
+useEffect(() => {
+    if (betToEdit && watchedType === 'pa_surebet' && watchedStatus === 'won') {
+        const { totalStake } = surebetCalculations;
+        let profit = 0;
+
+        if (watchedOutcomeScenario === 'double_green') {
+            profit = (watchedSubBets || []).reduce((acc, bet) => {
+                const betReturn = bet.isFreebet ? (bet.stake * (bet.odds - 1)) : (bet.stake * bet.odds);
+                return acc + betReturn;
+            }, 0) - totalStake;
+        } else if (watchedOutcomeScenario === 'pa_hedge') {
+            if (hedgeOdd && hedgeOdd > 1 && totalStake > 0) {
+                // Assume the PA bet is the one with the highest stake (usually) or identify it.
+                // For simplicity, let's find the bet that qualified for P.A.
+                const paBet = watchedSubBets?.find(b => b.bookmaker.toLowerCase().includes('bet365')); // Simple assumption
+                
+                // Let's assume the user wants to hedge the *entire initial operation stake*
+                const hedgeStake = totalStake;
+                
+                // Return from the hedge bet
+                const hedgeReturn = hedgeStake / hedgeOdd;
+
+                // Profit from the P.A. bet (it was paid out in full)
+                const paBetReturn = paBet ? (paBet.stake * paBet.odds) : 0;
+                
+                // We need to find the total profit.
+                // 1. The P.A. bet was paid out.
+                // 2. We made a hedge bet.
+                // The total profit is the return from the hedge bet MINUS the cost of the other legs of the original bet.
+                
+                // The correct logic is simpler:
+                // We invested 'totalStake'.
+                // The P.A. leg paid out, let's say its return is 'paReturn'.
+                // We then place a hedge bet. The amount we need to stake on the hedge to guarantee a profit is a separate calculation.
+                // A simpler way to model this is:
+                // We got the PA return. Then we made a new bet.
+                // Let's use the user's logic: Bet TotalStake / hedgeOdd.
+                const hedgeProfit = (totalStake / hedgeOdd) * (hedgeOdd - 1);
+                
+                // The user's request is to find the net profit.
+                // You get a payout from the P.A. bet.
+                // You also now have a winning hedge bet.
+                // Your total profit is (PA_Return + Hedge_Return) - Total_Stakes_Invested.
+                
+                const otherStakes = (watchedSubBets?.filter(b => b.id !== paBet?.id).reduce((acc, b) => acc + b.stake, 0)) || 0;
+                
+                // Correct calculation: The return from the hedge bet minus the money lost on the other legs.
+                const profitFromHedge = (totalStake / hedgeOdd) * (hedgeOdd - 1);
+                profit = profitFromHedge - otherStakes;
+
+            }
+        } else { // standard
+            profit = surebetCalculations.guaranteedProfit;
+        }
+        setValue('realizedProfit', profit);
+    }
+}, [watchedOutcomeScenario, watchedStatus, watchedType, betToEdit, surebetCalculations, setValue, watchedSubBets, hedgeOdd]);
 
 
   const onSubmit = (data: z.infer<typeof betSchema>) => {
