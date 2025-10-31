@@ -22,6 +22,8 @@ import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "../ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 
 const subBetSchema = z.object({
   id: z.string().optional(),
@@ -149,7 +151,7 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
     },
   });
 
-  const { control, handleSubmit, watch, formState: { isSubmitting, errors } } = form;
+  const { control, handleSubmit, watch, formState: { isSubmitting, errors }, setValue } = form;
   const { fields, append, remove } = useFieldArray({ control, name: "subBets" as never});
 
   const watchedType = watch("type");
@@ -178,6 +180,13 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
 
     onSave(finalData);
   };
+  
+  const handleTabChange = (value: string) => {
+    if (value === 'single' || value === 'surebet') {
+      setValue('type', value);
+    }
+  };
+
 
   return (
     <div className="flex flex-col h-full max-h-[90vh]">
@@ -191,49 +200,36 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
             <ScrollArea className="flex-1 min-h-0">
                 <div className="space-y-4 px-6 py-2">
-                    <FormField control={control} name="type" render={({ field }) => (
-                        <FormItem className="space-y-3">
-                            <FormLabel>Tipo de Aposta</FormLabel>
-                             <FormControl>
-                                <RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex items-center space-x-4">
-                                    <FormItem className="flex items-center space-x-2 space-y-0">
-                                        <FormControl><RadioGroupItem value="single" /></FormControl>
-                                        <FormLabel className="font-normal">Aposta Simples</FormLabel>
-                                    </FormItem>
-                                     <FormItem className="flex items-center space-x-2 space-y-0">
-                                        <FormControl><RadioGroupItem value="surebet" /></FormControl>
-                                        <FormLabel className="font-normal flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-teal-500"/> Surebet</FormLabel>
-                                    </FormItem>
-                                </RadioGroup>
-                            </FormControl>
-                            <FormMessage />
-                        </FormItem>
-                    )} />
-                     
-                     <div className="grid grid-cols-2 gap-4">
-                        <FormField control={control} name="sport" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Esporte</FormLabel>
-                                 <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                    <FormControl><SelectTrigger><SelectValue placeholder="Selecione o esporte" /></SelectTrigger></FormControl>
-                                    <SelectContent>
-                                        {sportOptions.map((sport) => <SelectItem key={sport} value={sport}>{sport}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                                <FormMessage />
-                            </FormItem>
-                        )} />
-                        <FormField control={control} name="event" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Evento</FormLabel>
-                                <FormControl><Input {...field} placeholder="Ex: Time A vs Time B" /></FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )} />
-                    </div>
-
-                    {watchedType === 'single' ? (
-                        <div className="space-y-4">
+                    
+                    <Tabs defaultValue={watchedType} onValueChange={handleTabChange} className="w-full">
+                        <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="single">Aposta Simples</TabsTrigger>
+                            <TabsTrigger value="surebet" className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-teal-500"/> Surebet</TabsTrigger>
+                        </TabsList>
+                        
+                        <div className="grid grid-cols-2 gap-4 mt-4">
+                            <FormField control={control} name="sport" render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Esporte</FormLabel>
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <FormControl><SelectTrigger><SelectValue placeholder="Selecione o esporte" /></SelectTrigger></FormControl>
+                                        <SelectContent>
+                                            {sportOptions.map((sport) => <SelectItem key={sport} value={sport}>{sport}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )} />
+                            <FormField control={control} name="event" render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Evento</FormLabel>
+                                    <FormControl><Input {...field} placeholder="Ex: Time A vs Time B" /></FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )} />
+                        </div>
+                        
+                        <TabsContent value="single" className="space-y-4 mt-4">
                             <FormField control={control} name="betType" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Tipo de Aposta</FormLabel>
@@ -276,9 +272,9 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
                                     <FormMessage />
                                 </FormItem>
                             )} />
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
+                        </TabsContent>
+                        
+                        <TabsContent value="surebet" className="space-y-4 mt-4">
                              <h3 className="text-md font-medium mb-2">Apostas da Surebet</h3>
                             <div className="space-y-4">
                                 {fields.map((item, index) => (
@@ -345,8 +341,10 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
                                     <FormMessage />
                                 </FormItem>
                             )} />
-                        </div>
-                    )}
+                        </TabsContent>
+                    </Tabs>
+                    
+
                      <div className="grid grid-cols-2 gap-4">
                         <FormField control={control} name="status" render={({ field }) => (
                             <FormItem>
@@ -425,5 +423,3 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
     </div>
   );
 }
-
-    
