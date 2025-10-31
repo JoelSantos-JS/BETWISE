@@ -145,10 +145,10 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
                         <p className="text-xs text-muted-foreground">Total Apostado</p>
                     </div>
                      <div>
-                        <p className={cn("font-bold", (bet.guaranteedProfit ?? 0) >= 0 ? "text-green-500" : "text-destructive")}>
-                            {bet.guaranteedProfit?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        <p className={cn("font-bold", ((bet.status === 'won' && bet.realizedProfit !== null && bet.realizedProfit !== undefined) ? bet.realizedProfit : (bet.guaranteedProfit ?? 0)) >= 0 ? "text-green-500" : "text-destructive")}>
+                            {((bet.status === 'won' && bet.realizedProfit !== null && bet.realizedProfit !== undefined) ? bet.realizedProfit : bet.guaranteedProfit)?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                         </p>
-                        <p className="text-xs text-muted-foreground">Lucro Garantido</p>
+                        <p className="text-xs text-muted-foreground">{(bet.status === 'won' && bet.realizedProfit !== null && bet.realizedProfit !== undefined) ? 'Lucro Final' : 'Lucro Garantido'}</p>
                     </div>
                      <div>
                         <p className={cn("font-bold", (bet.profitPercentage ?? 0) >= 0 ? "text-green-500" : "text-destructive")}>

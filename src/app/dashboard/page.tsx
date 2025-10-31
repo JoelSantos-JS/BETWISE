@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Bet, Bookmaker as BookmakerType } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, BarChart, AlertTriangle, Save, TrendingUp, TrendingDown, Calculator, Wallet, Landmark, Building, FileDown, Loader2 } from 'lucide-react';
+import { PlusCircle, BarChart, AlertTriangle, Save, TrendingUp, TrendingDown, Calculator, Wallet, Landmark, Building, FileDown, Loader2, Calendar, Filter } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BetCard } from '@/components/bets/bet-card';
@@ -24,10 +24,13 @@ import { SummaryCard } from '@/components/dashboard/summary-card';
 import { BetPerformanceChart } from '@/components/bets/bet-performance-chart';
 import { BetStatusChart } from '@/components/bets/bet-status-chart';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { SurebetCalculator } from '@/components/bets/surebet-calculator';
 import { AdvancedSurebetCalculator } from '@/components/bets/advanced-surebet-calculator';
 import { TradingCalculator } from '@/components/bets/trading-calculator';
-import { startOfDay, startOfWeek, startOfMonth } from 'date-fns';
+import { startOfDay, startOfWeek, startOfMonth, endOfDay, endOfWeek, endOfMonth, isWithinInterval, format } from 'date-fns';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc, addDoc, Timestamp, writeBatch } from 'firebase/firestore';
 import { useAuth } from '@/context/auth-context';
@@ -58,6 +61,12 @@ export default function BetsPage() {
 
     // Filter states
     const [filterStatus, setFilterStatus] = useState<string>("pending");
+    const [dateFilter, setDateFilter] = useState<string>("all");
+    const [customDateStart, setCustomDateStart] = useState<string>("");
+    const [customDateEnd, setCustomDateEnd] = useState<string>("");
+    const [profitFilter, setProfitFilter] = useState<string>("all");
+    const [minProfit, setMinProfit] = useState<string>("");
+    const [maxProfit, setMaxProfit] = useState<string>("");
     
     const { toast } = useToast();
 
@@ -120,9 +129,14 @@ export default function BetsPage() {
                 if (bet.status === 'won') return acc + (stake * odds) - stake;
                 if (bet.status === 'lost') return acc - stake;
              } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
-                 // Profit is calculated from the winning leg, not just the guaranteed one, for total P/L
-                 const wonSubBet = bet.subBets?.find(sb => sb.id.endsWith(bet.status)); // Simplified assumption
-                 if (bet.status === 'won' && bet.guaranteedProfit) return acc + bet.guaranteedProfit;
+                 // Para surebets, usa o realizedProfit se disponível (lucro final inserido manualmente)
+                 // Caso contrário, usa o guaranteedProfit (cálculo automático)
+                 if (bet.status === 'won') {
+                     const profitToUse = (bet.realizedProfit !== null && bet.realizedProfit !== undefined) 
+                         ? bet.realizedProfit 
+                         : bet.guaranteedProfit;
+                     return acc + (profitToUse ?? 0);
+                 }
                  if (bet.status === 'lost') return acc - (bet.totalStake ?? 0);
              }
              return acc;
@@ -140,11 +154,121 @@ export default function BetsPage() {
     }, [bets, bookmakers]);
 
     const filteredBets = useMemo(() => {
+        let filtered = bets;
+
+        // Filter by status
         const otherStatuses: Bet['status'][] = ['cashed_out', 'void'];
-        if (filterStatus === 'all') return bets;
-        if (filterStatus === 'other') return bets.filter(bet => otherStatuses.includes(bet.status));
-        return bets.filter(bet => bet.status === filterStatus);
-    }, [bets, filterStatus]);
+        if (filterStatus !== 'all') {
+            if (filterStatus === 'other') {
+                filtered = filtered.filter(bet => otherStatuses.includes(bet.status));
+            } else {
+                filtered = filtered.filter(bet => bet.status === filterStatus);
+            }
+        }
+
+        // Filter by date
+        if (dateFilter !== 'all') {
+            const now = new Date();
+            let startDate: Date;
+            let endDate: Date;
+
+            switch (dateFilter) {
+                case 'today':
+                    startDate = startOfDay(now);
+                    endDate = endOfDay(now);
+                    break;
+                case 'week':
+                    startDate = startOfWeek(now);
+                    endDate = endOfWeek(now);
+                    break;
+                case 'month':
+                    startDate = startOfMonth(now);
+                    endDate = endOfMonth(now);
+                    break;
+                case 'custom':
+                    if (customDateStart && customDateEnd) {
+                        startDate = startOfDay(new Date(customDateStart));
+                        endDate = endOfDay(new Date(customDateEnd));
+                    } else {
+                        return filtered; // Return without date filter if custom dates are not set
+                    }
+                    break;
+                default:
+                    return filtered;
+            }
+
+            filtered = filtered.filter(bet => {
+                const betDate = new Date(bet.date);
+                return isWithinInterval(betDate, { start: startDate, end: endDate });
+            });
+        }
+
+        // Filter by profit
+        if (profitFilter !== 'all') {
+            filtered = filtered.filter(bet => {
+                let profit = 0;
+                
+                if (bet.realizedProfit !== undefined) {
+                    profit = bet.realizedProfit;
+                } else if (bet.status === 'won') {
+                    if (bet.type === 'single') {
+                        profit = (bet.stake * bet.odds) - bet.stake;
+                    } else {
+                        profit = bet.guaranteedProfit || 0;
+                    }
+                } else if (bet.status === 'lost') {
+                    profit = bet.type === 'single' ? -bet.stake : -(bet.totalStake || bet.stake);
+                }
+
+                switch (profitFilter) {
+                    case 'positive':
+                        return profit > 0;
+                    case 'negative':
+                        return profit < 0;
+                    case 'range':
+                        const min = minProfit ? parseFloat(minProfit) : -Infinity;
+                        const max = maxProfit ? parseFloat(maxProfit) : Infinity;
+                        return profit >= min && profit <= max;
+                    default:
+                        return true;
+                }
+            });
+        }
+
+        return filtered;
+    }, [bets, filterStatus, dateFilter, customDateStart, customDateEnd, profitFilter, minProfit, maxProfit]);
+
+    // Filtered statistics
+    const filteredStats = useMemo(() => {
+        const filteredProfit = filteredBets.reduce((acc, bet) => {
+            if (bet.type === 'single') {
+                const stake = bet.stake;
+                if (bet.status === 'won') return acc + (stake * bet.odds) - stake;
+                if (bet.status === 'lost') return acc - stake;
+            } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+                if (bet.status === 'won') {
+                    const profitToUse = (bet.realizedProfit !== null && bet.realizedProfit !== undefined) 
+                        ? bet.realizedProfit 
+                        : bet.guaranteedProfit;
+                    return acc + (profitToUse ?? 0);
+                }
+                if (bet.status === 'lost') return acc - (bet.totalStake ?? 0);
+            }
+            return acc;
+        }, 0);
+
+        const filteredWinRate = filteredBets.length > 0 ? 
+            (filteredBets.filter(b => b.status === 'won').length / filteredBets.filter(b => ['won', 'lost'].includes(b.status)).length) * 100 : 0;
+
+        return {
+            totalBets: filteredBets.length,
+            profit: filteredProfit,
+            winRate: filteredWinRate,
+            wonBets: filteredBets.filter(b => b.status === 'won').length,
+            lostBets: filteredBets.filter(b => b.status === 'lost').length,
+            pendingBets: filteredBets.filter(b => b.status === 'pending').length
+        };
+    }, [filteredBets]);
     
     // CRUD Handlers for Bets
     const handleOpenBetForm = (bet: Bet | null = null) => {
@@ -290,7 +414,41 @@ export default function BetsPage() {
 
             // 2. Prepare Bookmakers Data
             const bookmakersExportData = bookmakers.map(bk => {
-                const { profit, currentBalance } = (new BookmakerCard({bookmaker: bk, bets, onEdit: ()=>{}, onDelete: ()=>{} })).props.stats;
+                // Calculate bookmaker stats directly
+                const relevantBets = bets.filter(bet => {
+                    if (bet.type === 'single') return bet.bookmaker === bk.name;
+                    if (bet.type === 'surebet') return bet.subBets?.some(sb => sb.bookmaker === bk.name);
+                    return false;
+                }).filter(bet => ['won', 'lost'].includes(bet.status));
+
+                const profit = relevantBets.reduce((acc, bet) => {
+                    let subProfit = 0;
+                    if (bet.type === 'single') {
+                         if (bet.status === 'won') subProfit = (bet.stake! * bet.odds! - bet.stake!);
+                         if (bet.status === 'lost') subProfit = -bet.stake!;
+                    } else if (bet.type === 'surebet') {
+                        const subBet = bet.subBets?.find(sb => sb.bookmaker === bk.name);
+                        if (!subBet) return acc;
+                        
+                        if (bet.status === 'won') {
+                            // Find which bet won
+                            const winningBet = bet.subBets?.find(sb => (sb.stake * sb.odds - (bet.totalStake ?? 0)) > 0);
+                            if (winningBet?.bookmaker === bk.name) {
+                                subProfit = winningBet.isFreebet ? (winningBet.stake * (winningBet.odds -1)) : (winningBet.stake * winningBet.odds);
+                            } else if(winningBet) {
+                                subProfit = 0;
+                            }
+                        }
+                        
+                        // Subtract all stakes made at this bookmaker, as they are costs
+                        const totalStakedAtHouse = bet.subBets?.filter(sb => sb.bookmaker === bk.name).reduce((sum, s) => sum + s.stake, 0) ?? 0;
+                        subProfit -= totalStakedAtHouse;
+                    }
+                    return acc + subProfit;
+                }, 0);
+
+                const currentBalance = bk.initialBankroll + profit;
+
                 return {
                     'Casa de Apostas': bk.name,
                     'Banca Inicial': bk.initialBankroll,
@@ -470,6 +628,165 @@ export default function BetsPage() {
                 </div>
              </div>
              
+             {/* Filtered Statistics */}
+             {(dateFilter !== 'all' || profitFilter !== 'all') && (
+                <div className="mb-6">
+                    <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <BarChart className="h-5 w-5" />
+                        Estatísticas do Período Filtrado
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <SummaryCard
+                            title="Total de Apostas"
+                            value={filteredStats.totalBets}
+                            icon={Calculator}
+                        />
+                        <SummaryCard
+                            title="Lucro do Período"
+                            value={filteredStats.profit}
+                            icon={filteredStats.profit >= 0 ? TrendingUp : TrendingDown}
+                            isCurrency
+                            valueClassName={filteredStats.profit >= 0 ? "text-green-500" : "text-destructive"}
+                        />
+                        <SummaryCard
+                            title="Taxa de Acerto"
+                            value={filteredStats.winRate}
+                            icon={BarChart}
+                            isPercentage
+                            valueClassName={filteredStats.winRate >= 50 ? "text-green-500" : "text-destructive"}
+                        />
+                        <SummaryCard
+                            title="Ganhas/Perdidas"
+                            value={`${filteredStats.wonBets}/${filteredStats.lostBets}`}
+                            icon={Calculator}
+                        />
+                    </div>
+                </div>
+             )}
+
+             {/* Filters Section */}
+             <div className="mb-6">
+                <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <Filter className="h-5 w-5" />
+                    Filtros
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+                    {/* Date Filter */}
+                    <div className="space-y-2">
+                        <Label htmlFor="date-filter" className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4" />
+                            Filtro por Data
+                        </Label>
+                        <Select value={dateFilter} onValueChange={setDateFilter}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Selecione o período" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Todas as datas</SelectItem>
+                                <SelectItem value="today">Hoje</SelectItem>
+                                <SelectItem value="week">Esta semana</SelectItem>
+                                <SelectItem value="month">Este mês</SelectItem>
+                                <SelectItem value="custom">Período personalizado</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        
+                        {dateFilter === 'custom' && (
+                            <div className="grid grid-cols-2 gap-2 mt-2">
+                                <div>
+                                    <Label htmlFor="start-date" className="text-xs">Data inicial</Label>
+                                    <Input
+                                        id="start-date"
+                                        type="date"
+                                        value={customDateStart}
+                                        onChange={(e) => setCustomDateStart(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <Label htmlFor="end-date" className="text-xs">Data final</Label>
+                                    <Input
+                                        id="end-date"
+                                        type="date"
+                                        value={customDateEnd}
+                                        onChange={(e) => setCustomDateEnd(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Profit Filter */}
+                    <div className="space-y-2">
+                        <Label htmlFor="profit-filter" className="flex items-center gap-2">
+                            <TrendingUp className="h-4 w-4" />
+                            Filtro por Lucro
+                        </Label>
+                        <Select value={profitFilter} onValueChange={setProfitFilter}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Selecione o tipo" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Todos os lucros</SelectItem>
+                                <SelectItem value="positive">Apenas positivos</SelectItem>
+                                <SelectItem value="negative">Apenas negativos</SelectItem>
+                                <SelectItem value="range">Faixa personalizada</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        
+                        {profitFilter === 'range' && (
+                            <div className="grid grid-cols-2 gap-2 mt-2">
+                                <div>
+                                    <Label htmlFor="min-profit" className="text-xs">Lucro mínimo</Label>
+                                    <Input
+                                        id="min-profit"
+                                        type="number"
+                                        step="0.01"
+                                        placeholder="R$ 0,00"
+                                        value={minProfit}
+                                        onChange={(e) => setMinProfit(e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <Label htmlFor="max-profit" className="text-xs">Lucro máximo</Label>
+                                    <Input
+                                        id="max-profit"
+                                        type="number"
+                                        step="0.01"
+                                        placeholder="R$ 1000,00"
+                                        value={maxProfit}
+                                        onChange={(e) => setMaxProfit(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Clear Filters */}
+                    <div className="space-y-2">
+                        <Label className="flex items-center gap-2">
+                            <Filter className="h-4 w-4" />
+                            Ações
+                        </Label>
+                        <Button 
+                            variant="outline" 
+                            onClick={() => {
+                                setDateFilter('all');
+                                setProfitFilter('all');
+                                setCustomDateStart('');
+                                setCustomDateEnd('');
+                                setMinProfit('');
+                                setMaxProfit('');
+                            }}
+                            className="w-full"
+                        >
+                            Limpar Filtros
+                        </Button>
+                        <div className="text-xs text-muted-foreground">
+                            {filteredStats.totalBets} de {summaryStats.totalBets} apostas
+                        </div>
+                    </div>
+                </div>
+             </div>
+
              <h3 className="text-2xl font-bold mb-4">Minhas Apostas</h3>
             <Tabs defaultValue="pending" onValueChange={setFilterStatus} className="w-full">
                 <TabsList className="grid w-full grid-cols-5 mb-6">

@@ -192,24 +192,27 @@ useEffect(() => {
         };
 
         if (watchedOutcomeScenario === 'double_green') {
+            // No duplo green com pagamento antecipado, o ganho é o valor total apostado
+            // pois você já recebeu o pagamento antecipado e não perdeu o valor apostado
             profit = subBets.reduce((acc, bet) => {
-                return acc + getNetProfit(bet.stake, bet.odds, bet.isFreebet);
+                return acc + bet.stake; // Ganho = valor apostado (já que houve pagamento antecipado)
             }, 0);
+            profit = Math.round(profit * 100) / 100; // Arredondamento para 2 casas decimais
 
         } else if (watchedOutcomeScenario === 'pa_hedge' && hedgeOdd && hedgeOdd > 1) {
-            const paLeg = subBets[0];
-            const hedgeStake = subBets.filter(b => !b.isFreebet).reduce((acc,b) => acc + b.stake, 0) / hedgeOdd;
+            // P.A. com Cobertura: 
+            // Stake de cobertura = Total apostado / Odd de cobertura
+            // Lucro = Total apostado - Stake de cobertura
+            const totalStakeUsed = subBets.reduce((acc, bet) => acc + bet.stake, 0);
+            const hedgeStake = totalStakeUsed / hedgeOdd;
             
-            const paProfit = getNetProfit(paLeg.stake, paLeg.odds, paLeg.isFreebet);
-            const hedgeProfit = hedgeStake * (hedgeOdd - 1);
-            
-            // Assume other initial legs lost their stake
-            const otherLostStakes = subBets.slice(1).reduce((acc, bet) => acc + (bet.isFreebet ? 0 : bet.stake), 0);
-
-            profit = paProfit - otherLostStakes + hedgeProfit;
+            // Lucro final = Total apostado - Stake necessária para cobertura
+            profit = totalStakeUsed - hedgeStake;
+            profit = Math.round(profit * 100) / 100;
 
         } else { // standard
             profit = surebetCalculations.guaranteedProfit;
+            profit = Math.round(profit * 100) / 100; // Arredondamento para 2 casas decimais
         }
         setValue('realizedProfit', profit);
     }

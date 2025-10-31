@@ -4,7 +4,7 @@ import type { LucideIcon } from "lucide-react";
 
 type SummaryCardProps = {
     title: string;
-    value: number;
+    value: number | string;
     icon: LucideIcon;
     isCurrency?: boolean;
     isPercentage?: boolean;
@@ -14,11 +14,13 @@ type SummaryCardProps = {
 
 export function SummaryCard({ title, value, icon: Icon, isCurrency = false, isPercentage = false, className, valueClassName }: SummaryCardProps) {
     
-    const formattedValue = isCurrency
-    ? value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-    : isPercentage
-    ? `${value.toFixed(2)}%`
-    : value.toString();
+    const formattedValue = typeof value === 'string' 
+        ? value
+        : isCurrency
+        ? value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        : isPercentage
+        ? `${value.toFixed(1)}%`
+        : value.toString();
     
     return (
         <Card>

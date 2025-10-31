@@ -2,6 +2,7 @@ import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster"
 import { AuthProvider } from '@/context/auth-context';
+import { BetProvider } from '@/context/bet-provider';
 
 export const metadata: Metadata = {
   title: 'BetWise Dashboard',
@@ -22,7 +23,9 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased bg-background">
         <AuthProvider>
-          {children}
+          <BetProvider>
+            {children}
+          </BetProvider>
         </AuthProvider>
         <Toaster />
       </body>
