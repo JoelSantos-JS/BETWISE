@@ -184,35 +184,43 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
     return calculateSurebet(watchedSubBets);
   }, [watchedType, watchedSubBets]);
 
-  useEffect(() => {
-      if (betToEdit && watchedType === 'pa_surebet' && watchedStatus === 'won') {
-          let profit = 0;
+useEffect(() => {
+    if (betToEdit && watchedType === 'pa_surebet' && watchedStatus === 'won') {
+        let profit = 0;
+        const initialInvestment = (watchedSubBets || []).reduce((acc, b) => acc + (b.isFreebet ? 0 : b.stake), 0);
 
-          if (watchedOutcomeScenario === 'double_green') {
-              const totalNetProfit = (watchedSubBets || []).reduce((acc, bet) => {
-                  const netProfit = bet.stake * (bet.odds - 1);
-                  return acc + netProfit;
-              }, 0);
-              profit = totalNetProfit;
+        if (watchedOutcomeScenario === 'double_green') {
+            // Soma o retorno líquido de TODAS as pernas.
+            // Lucro = (Retorno 1 + Retorno 2 + ...) - Custo Total
+            const totalReturn = (watchedSubBets || []).reduce((acc, bet) => {
+                const betReturn = bet.isFreebet ? bet.stake * (bet.odds - 1) : bet.stake * bet.odds;
+                return acc + betReturn;
+            }, 0);
+            profit = totalReturn - initialInvestment;
 
-          } else if (watchedOutcomeScenario === 'pa_hedge') {
-              if (hedgeOdd && hedgeOdd > 1) {
-                  const paBet = (watchedSubBets || [])[0]; // Assume PA bet is the first one
-                  const paBetNetProfit = paBet.isFreebet ? paBet.stake * (paBet.odds - 1) : paBet.stake * (paBet.odds-1);
-                  
-                  const initialInvestment = (watchedSubBets || []).reduce((acc, b) => acc + (b.isFreebet ? 0 : b.stake), 0);
-                  const hedgeStake = initialInvestment; // hedge with the full initial investment
-                  const hedgeNetProfit = hedgeStake * (hedgeOdd - 1);
-                  
-                  // Total profit is the sum of both net profits
-                  profit = paBetNetProfit + hedgeNetProfit;
-              }
-          } else { // standard
-              profit = surebetCalculations.guaranteedProfit;
-          }
-          setValue('realizedProfit', profit);
-      }
-  }, [betToEdit, watchedType, watchedStatus, watchedOutcomeScenario, hedgeOdd, watchedSubBets, setValue, surebetCalculations]);
+        } else if (watchedOutcomeScenario === 'pa_hedge') {
+            if (hedgeOdd && hedgeOdd > 1) {
+                // Cenário P.A com Cobertura (Hedge)
+                const paBet = (watchedSubBets || [])[0]; // Assumimos que a aposta P.A. é a primeira.
+                const otherBets = (watchedSubBets || []).slice(1);
+                
+                // 1. O que ganhamos com a aposta P.A. que já foi paga.
+                const paBetReturn = paBet.isFreebet ? paBet.stake * (paBet.odds-1) : paBet.stake * paBet.odds;
+
+                // 2. O que gastamos/ganhamos com a cobertura.
+                // A aposta de cobertura é feita com o valor total investido inicialmente.
+                const hedgeStake = initialInvestment;
+                const hedgeReturn = hedgeStake * hedgeOdd;
+
+                // 3. Lucro Final = (Retorno da P.A. + Retorno do Hedge) - (Custo Inicial + Custo do Hedge)
+                profit = (paBetReturn + hedgeReturn) - (initialInvestment + hedgeStake);
+            }
+        } else { // standard
+            profit = surebetCalculations.guaranteedProfit;
+        }
+        setValue('realizedProfit', profit);
+    }
+}, [betToEdit, watchedType, watchedStatus, watchedOutcomeScenario, hedgeOdd, watchedSubBets, setValue, surebetCalculations]);
 
 
   const onSubmit = (data: z.infer<typeof betSchema>) => {
