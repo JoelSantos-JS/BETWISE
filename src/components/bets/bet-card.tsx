@@ -3,7 +3,7 @@
 import type { Bet } from '@/lib/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Edit, Trash2, MoreVertical, Calendar, TrendingUp, TrendingDown, Hourglass, DollarSign, ShieldCheck, List, GitCommitHorizontal, Star, Gift, Building, Target } from 'lucide-react';
+import { Edit, Trash2, MoreVertical, Calendar, TrendingUp, TrendingDown, Hourglass, DollarSign, ShieldCheck, List, GitCommitHorizontal, Star, Gift, Building, Target, Zap } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
@@ -24,8 +24,15 @@ const statusMap = {
   void: { label: 'Anulada', color: 'bg-gray-500', icon: GitCommitHorizontal },
 };
 
+const scenarioMap = {
+    double_green: { label: 'Duplo Green', icon: Zap },
+    pa_hedge: { label: 'P.A. com Cobertura', icon: ShieldCheck },
+    standard: { label: '', icon: null }
+}
+
 export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
   const statusInfo = statusMap[bet.status];
+  const scenarioInfo = bet.outcomeScenario ? scenarioMap[bet.outcomeScenario] : null;
   
   const profit = (() => {
     // Se o lucro final foi inserido manualmente, ele tem prioridade
@@ -72,20 +79,19 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
                     {bet.bookmaker && bet.type === 'single' && (
                         <Badge variant="outline" className="gap-1.5"><Building className="w-3 h-3" /> {bet.bookmaker}</Badge>
                     )}
-                    {bet.earnedFreebetValue && bet.earnedFreebetValue > 0 && (
-                         <TooltipProvider>
+                    {scenarioInfo && scenarioInfo.icon && (
+                        <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger>
-                                     <Badge className="bg-orange-500 hover:bg-orange-600 text-white gap-1.5 border-transparent">
-                                        <Gift className='w-4 h-4'/>
-                                        {bet.earnedFreebetValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    <Badge variant="default" className="gap-1.5">
+                                        <scenarioInfo.icon className="w-4 h-4" /> {scenarioInfo.label}
                                     </Badge>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                    <p>Ganhou uma Freebet de {bet.earnedFreebetValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
+                                    <p>Esta aposta foi resolvida como: {scenarioInfo.label}</p>
                                 </TooltipContent>
                             </Tooltip>
-                         </TooltipProvider>
+                        </TooltipProvider>
                     )}
                  </div>
                  <CardTitle className="text-lg font-bold mt-2">{bet.event}</CardTitle>

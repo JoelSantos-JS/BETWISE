@@ -13,6 +13,8 @@ export interface Bookmaker {
     initialBankroll: number;
 }
 
+export type OutcomeScenario = 'standard' | 'double_green' | 'pa_hedge';
+
 export interface Bet {
   id: string;
   type: 'single' | 'surebet' | 'pa_surebet';
@@ -23,6 +25,7 @@ export interface Bet {
   notes?: string;
   earnedFreebetValue?: number | null; // Valor da freebet ganha com esta aposta
   realizedProfit?: number | null; // Lucro final real inserido manualmente
+  outcomeScenario?: OutcomeScenario | null; // Cenário de resolução da aposta
 
   // For 'single' bets
   bookmaker?: string | null; // Associated bookmaker

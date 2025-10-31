@@ -6,9 +6,9 @@ import { z } from "zod";
 import { Loader2, ShieldCheck, Trash2, PlusCircle, Star, Target } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import React from 'react';
+import React, { useEffect } from 'react';
 
-import type { Bet, Bookmaker } from "@/lib/types";
+import type { Bet, Bookmaker, OutcomeScenario } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,7 +20,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Calendar } from "../ui/calendar";
 import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "../ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -42,6 +41,7 @@ const baseBetSchema = z.object({
   notes: z.string().optional(),
   earnedFreebetValue: z.coerce.number().min(0, "O valor não pode ser negativo").optional().nullable(),
   realizedProfit: z.coerce.number().optional().nullable(),
+  outcomeScenario: z.enum(['standard', 'double_green', 'pa_hedge']).optional().nullable(),
 });
 
 const singleBetSchema = baseBetSchema.extend({
@@ -76,6 +76,8 @@ const betSchema = z.discriminatedUnion("type", [
 
 const sportOptions = ["Futebol", "Basquete", "Tênis", "Vôlei", "Futebol Americano", "MMA", "E-Sports", "Outro"];
 const statusOptions: Record<Bet['status'], string> = { pending: 'Pendente', won: 'Ganha', lost: 'Perdida', cashed_out: 'Cash Out', void: 'Anulada' };
+const scenarioOptions: Record<OutcomeScenario, string> = { standard: 'Resultado Padrão', double_green: 'Duplo Green', pa_hedge: 'P.A. com Cobertura' };
+
 
 interface BetFormProps {
   onSave: (bet: Omit<Bet, 'id'>) => void;
@@ -86,14 +88,14 @@ interface BetFormProps {
 
 const calculateSurebet = (subBets: z.infer<typeof subBetSchema>[] | undefined) => {
     if (!subBets || subBets.length < 2) {
-      return { totalStake: 0, guaranteedProfit: 0, profitPercentage: 0 };
+      return { totalStake: 0, guaranteedProfit: 0, profitPercentage: 0, potentialReturns: [] };
     }
 
     const realMoneyStakes = subBets.filter(b => !b.isFreebet);
     const totalStake = realMoneyStakes.reduce((acc, bet) => acc + (bet.stake || 0), 0);
 
     if (totalStake <= 0 && realMoneyStakes.length === subBets.length) {
-      return { totalStake, guaranteedProfit: 0, profitPercentage: 0 };
+      return { totalStake, guaranteedProfit: 0, profitPercentage: 0, potentialReturns: [] };
     }
 
     const potentialReturns = subBets.map(bet => {
@@ -103,22 +105,20 @@ const calculateSurebet = (subBets: z.infer<typeof subBetSchema>[] | undefined) =
         let profitIfThisWins;
 
         if (bet.isFreebet) {
-            // Se esta for a freebet, o lucro é o retorno (stake * (odds - 1)) menos as outras apostas com dinheiro real
             const otherRealMoneyStakes = subBets
                 .filter(other => !other.isFreebet && other.id !== bet.id)
                 .reduce((acc, s) => acc + (s.stake || 0), 0);
             profitIfThisWins = (stake * (odds - 1)) - otherRealMoneyStakes;
         } else {
-             // Se esta for uma aposta com dinheiro real, o lucro é o retorno (stake * odds) menos o total investido com dinheiro real
             profitIfThisWins = (stake * odds) - totalStake;
         }
         return profitIfThisWins;
     });
 
     const guaranteedProfit = Math.min(...potentialReturns);
-    const profitPercentage = totalStake > 0 ? (guaranteedProfit / totalStake) * 100 : Infinity; // ROI infinito se não houver stake real
+    const profitPercentage = totalStake > 0 ? (guaranteedProfit / totalStake) * 100 : Infinity;
   
-    return { totalStake, guaranteedProfit, profitPercentage };
+    return { totalStake, guaranteedProfit, profitPercentage, potentialReturns };
 };
 
 export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProps) {
@@ -150,6 +150,7 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
          totalStake: betToEdit.totalStake || undefined,
          guaranteedProfit: betToEdit.guaranteedProfit || undefined,
          profitPercentage: betToEdit.profitPercentage || undefined,
+         outcomeScenario: betToEdit.outcomeScenario || 'standard',
     }) : {
         type: 'single',
         sport: "Futebol",
@@ -162,21 +163,45 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
         notes: "",
         earnedFreebetValue: 0,
         bookmaker: bookmakers.length > 0 ? bookmakers[0].name : '',
+        outcomeScenario: 'standard',
     },
   });
 
-  const { control, handleSubmit, watch, formState: { isSubmitting, errors }, setValue } = form;
+  const { control, handleSubmit, watch, formState: { isSubmitting }, setValue } = form;
   const { fields, append, remove } = useFieldArray({ control, name: "subBets" as never});
 
   const watchedType = watch("type");
   const watchedStatus = watch("status");
   const watchedSubBets = watch("subBets");
+  const watchedOutcomeScenario = watch("outcomeScenario");
 
   const surebetCalculations = React.useMemo(() => {
-    if (watchedType !== 'surebet' && watchedType !== 'pa_surebet') return { totalStake: 0, guaranteedProfit: 0, profitPercentage: 0 };
+    if (watchedType !== 'surebet' && watchedType !== 'pa_surebet') return { totalStake: 0, guaranteedProfit: 0, profitPercentage: 0, potentialReturns: [] };
     // @ts-ignore
     return calculateSurebet(watchedSubBets);
   }, [watchedType, watchedSubBets]);
+
+  useEffect(() => {
+      if (betToEdit && watchedType === 'pa_surebet' && watchedStatus === 'won') {
+          const { totalStake, potentialReturns } = surebetCalculations;
+          let profit = 0;
+          if (watchedOutcomeScenario === 'double_green') {
+              // Soma os retornos de todas as pernas (excluindo o stake original)
+              profit = (watchedSubBets || []).reduce((acc, bet) => {
+                  const betReturn = bet.isFreebet ? (bet.stake * (bet.odds - 1)) : (bet.stake * bet.odds);
+                  return acc + betReturn;
+              }, 0) - totalStake;
+          } else if (watchedOutcomeScenario === 'pa_hedge') {
+              // Em um hedge perfeito, o lucro final é o retorno da perna principal (P.A.) menos o stake total
+              const mainBetReturn = Math.max(...(potentialReturns || [0]));
+              profit = mainBetReturn;
+          } else { // standard
+              profit = surebetCalculations.guaranteedProfit;
+          }
+          setValue('realizedProfit', profit);
+      }
+  }, [watchedOutcomeScenario, watchedStatus, watchedType, betToEdit, surebetCalculations, setValue, watchedSubBets]);
+
 
   const onSubmit = (data: z.infer<typeof betSchema>) => {
     let finalData: Omit<Bet, 'id'> = JSON.parse(JSON.stringify(data));
@@ -188,13 +213,14 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
         finalData.profitPercentage = profitPercentage;
     }
     
-    // Set earnedFreebetValue to undefined if it's 0 or null to avoid saving it in DB
     if(!finalData.earnedFreebetValue) {
-        delete (finalData as any).earnedFreebetValue;
+        (finalData as any).earnedFreebetValue = null;
     }
-    // Set realizedProfit to undefined if it's 0 or null
-    if(!finalData.realizedProfit) {
-        delete (finalData as any).realizedProfit;
+    if(finalData.realizedProfit === undefined) {
+        (finalData as any).realizedProfit = null;
+    }
+     if(!finalData.outcomeScenario) {
+        (finalData as any).outcomeScenario = null;
     }
 
     onSave(finalData);
@@ -432,28 +458,6 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
                             )} />
                         </TabsContent>
                     </Tabs>
-                    
-                    {betToEdit && watchedStatus !== 'pending' && (
-                        <FormField
-                            control={control}
-                            name="realizedProfit"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Lucro Final (R$) (Opcional)</FormLabel>
-                                    <FormControl>
-                                        <Input
-                                            type="number"
-                                            step="0.01"
-                                            value={field.value ?? ''}
-                                            onChange={(e) => field.onChange(e.target.value === '' ? null : Number(e.target.value))}
-                                            placeholder="Lucro real da operação (ex: duplo green)"
-                                        />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                    )}
 
                      <div className="grid grid-cols-2 gap-4">
                         <FormField control={control} name="status" render={({ field }) => (
@@ -491,6 +495,41 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
                         )} />
                     </div>
 
+                    {betToEdit && watchedType === 'pa_surebet' && watchedStatus === 'won' && (
+                        <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                            <FormField control={control} name="outcomeScenario" render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Cenário de Resolução</FormLabel>
+                                    <Select onValueChange={field.onChange} defaultValue={field.value || 'standard'}>
+                                        <FormControl><SelectTrigger><SelectValue placeholder="Selecione o cenário" /></SelectTrigger></FormControl>
+                                        <SelectContent>
+                                            {Object.entries(scenarioOptions).map(([key, value]) => (
+                                                <SelectItem key={key} value={key as OutcomeScenario}>{value}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <FormMessage />
+                                </FormItem>
+                            )} />
+                            <FormField control={control} name="realizedProfit" render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Lucro Final (R$)</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            type="number"
+                                            step="0.01"
+                                            value={field.value ?? ''}
+                                            onChange={(e) => field.onChange(e.target.value === '' ? null : Number(e.target.value))}
+                                            placeholder="Lucro real da operação"
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )} />
+                        </div>
+                    )}
+
+
                      <FormField control={control} name="notes" render={({ field }) => (
                         <FormItem>
                             <FormLabel>Análise / Notas (Opcional)</FormLabel>
@@ -516,7 +555,7 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
                          <div>
                             <span className="text-muted-foreground">Retorno:</span>
                             <p className={cn("font-bold", surebetCalculations.profitPercentage >= 0 ? "text-green-500" : "text-destructive")}>
-                                {surebetCalculations.profitPercentage.toFixed(2)}%
+                                {isFinite(surebetCalculations.profitPercentage) ? `${surebetCalculations.profitPercentage.toFixed(2)}%` : 'N/A'}
                             </p>
                         </div>
                     </div>
