@@ -6,7 +6,7 @@ import { z } from "zod";
 import { Loader2, ShieldCheck, Trash2, PlusCircle, Star, Target } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import type { Bet, Bookmaker, OutcomeScenario } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -122,6 +122,8 @@ const calculateSurebet = (subBets: z.infer<typeof subBetSchema>[] | undefined) =
 };
 
 export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProps) {
+  const [hedgeOdd, setHedgeOdd] = useState<number | null>(null);
+
   const form = useForm<z.infer<typeof betSchema>>({
     resolver: zodResolver(betSchema),
     defaultValues: betToEdit ? (betToEdit.type === 'single' ? {
@@ -186,21 +188,31 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
           const { totalStake, potentialReturns } = surebetCalculations;
           let profit = 0;
           if (watchedOutcomeScenario === 'double_green') {
-              // Soma os retornos de todas as pernas (excluindo o stake original)
               profit = (watchedSubBets || []).reduce((acc, bet) => {
                   const betReturn = bet.isFreebet ? (bet.stake * (bet.odds - 1)) : (bet.stake * bet.odds);
                   return acc + betReturn;
               }, 0) - totalStake;
           } else if (watchedOutcomeScenario === 'pa_hedge') {
-              // Em um hedge perfeito, o lucro final é o retorno da perna principal (P.A.) menos o stake total
-              const mainBetReturn = Math.max(...(potentialReturns || [0]));
-              profit = mainBetReturn;
+              if (hedgeOdd && hedgeOdd > 1) {
+                  const paBet = watchedSubBets?.find(b => b.bookmaker.toLowerCase().includes('bet365')); // Simple assumption
+                  const hedgeStake = paBet?.stake || 0;
+                  const profitFromHedge = (hedgeStake / hedgeOdd) * (hedgeOdd - 1);
+                  const costOfHedge = hedgeStake;
+                  // Lucro = (Retorno do P.A.) - (Custo da aposta de cobertura) + (ganho líquido da aposta de cobertura se ela ganhar)
+                  // Simplified: Return of the Hedge bet - Cost of the Hedge bet
+                  const paReturn = (paBet?.stake || 0) * (paBet?.odds || 0);
+                  const otherStakes = (watchedSubBets?.filter(b => b.id !== paBet?.id).reduce((acc, b) => acc + b.stake, 0)) || 0;
+                  
+                  // Lucro = (retorno da aposta P.A.) + (retorno da aposta hedge) - (custo total)
+                  const hedgeReturn = (totalStake / hedgeOdd);
+                  profit = (paReturn + hedgeReturn) - totalStake;
+              }
           } else { // standard
               profit = surebetCalculations.guaranteedProfit;
           }
           setValue('realizedProfit', profit);
       }
-  }, [watchedOutcomeScenario, watchedStatus, watchedType, betToEdit, surebetCalculations, setValue, watchedSubBets]);
+  }, [watchedOutcomeScenario, watchedStatus, watchedType, betToEdit, surebetCalculations, setValue, watchedSubBets, hedgeOdd]);
 
 
   const onSubmit = (data: z.infer<typeof betSchema>) => {
@@ -496,7 +508,7 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
                     </div>
 
                     {betToEdit && watchedType === 'pa_surebet' && watchedStatus === 'won' && (
-                        <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                        <div className="p-4 border-t mt-4 space-y-4 bg-orange-500/10 rounded-lg border-orange-500/30">
                             <FormField control={control} name="outcomeScenario" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Cenário de Resolução</FormLabel>
@@ -511,6 +523,23 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
                                     <FormMessage />
                                 </FormItem>
                             )} />
+
+                            {watchedOutcomeScenario === 'pa_hedge' && (
+                                <FormItem>
+                                    <FormLabel>Odd da Cobertura (Hedge)</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            type="number"
+                                            step="0.01"
+                                            value={hedgeOdd ?? ''}
+                                            onChange={(e) => setHedgeOdd(e.target.value === '' ? null : Number(e.target.value))}
+                                            placeholder="Ex: 1.31"
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+
                             <FormField control={control} name="realizedProfit" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Lucro Final (R$)</FormLabel>
@@ -520,7 +549,7 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
                                             step="0.01"
                                             value={field.value ?? ''}
                                             onChange={(e) => field.onChange(e.target.value === '' ? null : Number(e.target.value))}
-                                            placeholder="Lucro real da operação"
+                                            placeholder="Lucro real calculado ou manual"
                                         />
                                     </FormControl>
                                     <FormMessage />
