@@ -28,6 +28,11 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
   const statusInfo = statusMap[bet.status];
   
   const profit = (() => {
+    // Se o lucro final foi inserido manualmente, ele tem prioridade
+    if (bet.realizedProfit !== null && bet.realizedProfit !== undefined) {
+      return bet.realizedProfit;
+    }
+    
     if (bet.status !== 'won' && bet.status !== 'lost') return null;
 
     if (bet.type === 'single') {
@@ -38,14 +43,10 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
       return 0;
     }
 
-    if ((bet.type === 'surebet' || bet.type === 'pa_surebet') && bet.status === 'won') {
-        // Para surebets ganhas, o lucro é o lucro garantido calculado
-        // ou, se não estiver definido, um valor positivo para indicar ganho.
-        return bet.guaranteedProfit ?? 0;
-    }
-     if ((bet.type === 'surebet' || bet.type === 'pa_surebet') && bet.status === 'lost') {
-        // A "perda" numa surebet é o prejuízo máximo calculado, que ainda pode ser um "lucro" pequeno ou prejuízo real.
-        return bet.guaranteedProfit ?? -(bet.totalStake ?? 0);
+    if ((bet.type === 'surebet' || bet.type === 'pa_surebet')) {
+       // Para surebets ganhas, o lucro é o lucro garantido calculado.
+       // Para perdidas (cenário que não deveria acontecer numa surebet perfeita), mostra o prejuízo máximo.
+       return bet.guaranteedProfit ?? null;
     }
     
     return null;
@@ -193,7 +194,7 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
                 <statusInfo.icon className="w-4 h-4" />
                 <span>{statusInfo.label}</span>
                 {profit !== null && (
-                     <span className={cn("font-bold", profit < 0 && 'text-red-300', profit >= 0 && 'text-green-300')}>
+                     <span className={cn("font-bold", profit < 0 ? "text-red-300" : "text-green-300")}>
                         ({profit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})
                     </span>
                 )}

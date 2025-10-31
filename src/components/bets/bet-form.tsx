@@ -41,6 +41,7 @@ const baseBetSchema = z.object({
   status: z.enum(['pending', 'won', 'lost', 'cashed_out', 'void']),
   notes: z.string().optional(),
   earnedFreebetValue: z.coerce.number().min(0, "O valor não pode ser negativo").optional().nullable(),
+  realizedProfit: z.coerce.number().optional().nullable(),
 });
 
 const singleBetSchema = baseBetSchema.extend({
@@ -131,6 +132,7 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
         status: betToEdit.status,
         notes: betToEdit.notes,
         earnedFreebetValue: betToEdit.earnedFreebetValue || 0,
+        realizedProfit: betToEdit.realizedProfit,
         betType: betToEdit.betType || '',
         stake: betToEdit.stake || 0,
         odds: betToEdit.odds || 1.01,
@@ -143,6 +145,7 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
         status: betToEdit.status,
         notes: betToEdit.notes,
         earnedFreebetValue: betToEdit.earnedFreebetValue || 0,
+        realizedProfit: betToEdit.realizedProfit,
         subBets: betToEdit.subBets || [],
          totalStake: betToEdit.totalStake || undefined,
          guaranteedProfit: betToEdit.guaranteedProfit || undefined,
@@ -166,6 +169,7 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
   const { fields, append, remove } = useFieldArray({ control, name: "subBets" as never});
 
   const watchedType = watch("type");
+  const watchedStatus = watch("status");
   const watchedSubBets = watch("subBets");
 
   const surebetCalculations = React.useMemo(() => {
@@ -187,6 +191,10 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
     // Set earnedFreebetValue to undefined if it's 0 or null to avoid saving it in DB
     if(!finalData.earnedFreebetValue) {
         delete (finalData as any).earnedFreebetValue;
+    }
+    // Set realizedProfit to undefined if it's 0 or null
+    if(!finalData.realizedProfit) {
+        delete (finalData as any).realizedProfit;
     }
 
     onSave(finalData);
@@ -425,6 +433,27 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
                         </TabsContent>
                     </Tabs>
                     
+                    {betToEdit && watchedStatus !== 'pending' && (
+                        <FormField
+                            control={control}
+                            name="realizedProfit"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Lucro Final (R$) (Opcional)</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            type="number"
+                                            step="0.01"
+                                            value={field.value ?? ''}
+                                            onChange={(e) => field.onChange(e.target.value === '' ? null : Number(e.target.value))}
+                                            placeholder="Lucro real da operação (ex: duplo green)"
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    )}
 
                      <div className="grid grid-cols-2 gap-4">
                         <FormField control={control} name="status" render={({ field }) => (

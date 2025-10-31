@@ -22,6 +22,7 @@ export interface Bet {
   status: 'pending' | 'won' | 'lost' | 'cashed_out' | 'void';
   notes?: string;
   earnedFreebetValue?: number | null; // Valor da freebet ganha com esta aposta
+  realizedProfit?: number | null; // Lucro final real inserido manualmente
 
   // For 'single' bets
   bookmaker?: string | null; // Associated bookmaker
