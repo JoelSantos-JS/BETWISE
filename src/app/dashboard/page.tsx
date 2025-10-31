@@ -454,25 +454,7 @@ export default function BetsPage() {
                     <Calculator className="w-7 h-7 text-primary" />
                     Calculadoras
                  </h3>
-                <Tabs defaultValue="simple" className="w-full">
-                    <TabsList className="grid w-full grid-cols-3 mb-6">
-                        <TabsTrigger value="simple">Surebet Simples</TabsTrigger>
-                        <TabsTrigger value="trading">Trading (Back/Lay)</TabsTrigger>
-                        <TabsTrigger value="advanced">Surebet Avançada</TabsTrigger>
-                    </TabsList>
-                    
-                    <TabsContent value="simple">
-                        <SurebetCalculator />
-                    </TabsContent>
-
-                     <TabsContent value="trading">
-                        <TradingCalculator />
-                    </TabsContent>
-                    
-                    <TabsContent value="advanced">
-                        <AdvancedSurebetCalculator />
-                    </TabsContent>
-                </Tabs>
+                 <AdvancedSurebetCalculator />
             </div>
 
              <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
@@ -566,5 +548,7 @@ export default function BetsPage() {
         </>
     )
 }
+
+    
 
     
