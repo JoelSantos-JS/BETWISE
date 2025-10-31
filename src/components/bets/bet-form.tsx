@@ -88,37 +88,37 @@ interface BetFormProps {
 
 const calculateSurebet = (subBets: z.infer<typeof subBetSchema>[] | undefined) => {
     if (!subBets || subBets.length < 2) {
-      return { totalStake: 0, guaranteedProfit: 0, profitPercentage: 0, potentialReturns: [] };
+      return { totalStake: 0, guaranteedProfit: 0, profitPercentage: 0 };
     }
 
-    const realMoneyStakes = subBets.filter(b => !b.isFreebet);
-    const totalStake = realMoneyStakes.reduce((acc, bet) => acc + (bet.stake || 0), 0);
+    // 1. Custo Real (Total Stake): Soma apenas as apostas com dinheiro real.
+    const totalStake = subBets
+      .filter(bet => !bet.isFreebet)
+      .reduce((acc, bet) => acc + (bet.stake || 0), 0);
 
-    if (totalStake <= 0 && realMoneyStakes.length === subBets.length) {
-      return { totalStake, guaranteedProfit: 0, profitPercentage: 0, potentialReturns: [] };
+    if (totalStake <= 0 && !subBets.some(b => b.isFreebet)) {
+        return { totalStake, guaranteedProfit: 0, profitPercentage: 0 };
     }
-
+    
+    // 2. Retornos Potenciais: Calcula o retorno líquido de cada "perna" da aposta.
     const potentialReturns = subBets.map(bet => {
         const stake = bet.stake || 0;
         const odds = bet.odds || 0;
         
-        let profitIfThisWins;
-
-        if (bet.isFreebet) {
-            const otherRealMoneyStakes = subBets
-                .filter(other => !other.isFreebet && other.id !== bet.id)
-                .reduce((acc, s) => acc + (s.stake || 0), 0);
-            profitIfThisWins = (stake * (odds - 1)) - otherRealMoneyStakes;
-        } else {
-            profitIfThisWins = (stake * odds) - totalStake;
-        }
-        return profitIfThisWins;
+        // Se esta perna ganhar, qual o retorno líquido?
+        // Retorno Bruto - Custo Real Total
+        const grossReturn = bet.isFreebet ? stake * (odds - 1) : stake * odds;
+        
+        return grossReturn - totalStake;
     });
 
+    // 3. Lucro Garantido: É o pior cenário entre todos os retornos líquidos.
     const guaranteedProfit = Math.min(...potentialReturns);
+    
+    // 4. Retorno Percentual (ROI)
     const profitPercentage = totalStake > 0 ? (guaranteedProfit / totalStake) * 100 : Infinity;
   
-    return { totalStake, guaranteedProfit, profitPercentage, potentialReturns };
+    return { totalStake, guaranteedProfit, profitPercentage };
 };
 
 export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProps) {
@@ -178,7 +178,7 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
   const watchedOutcomeScenario = watch("outcomeScenario");
   
   const surebetCalculations = React.useMemo(() => {
-    if (watchedType !== 'surebet' && watchedType !== 'pa_surebet') return { totalStake: 0, guaranteedProfit: 0, profitPercentage: 0, potentialReturns: [] };
+    if (watchedType !== 'surebet' && watchedType !== 'pa_surebet') return { totalStake: 0, guaranteedProfit: 0, profitPercentage: 0 };
     // @ts-ignore
     return calculateSurebet(watchedSubBets);
   }, [watchedType, watchedSubBets]);
@@ -188,74 +188,32 @@ useEffect(() => {
         let profit = 0;
         const subBets = watchedSubBets || [];
         const getNetProfit = (stake: number, odds: number, isFreebet: boolean | undefined) => {
-            return isFreebet ? stake * (odds - 1) : stake * (odds - 1);
+             return isFreebet ? stake * (odds - 1) : stake * (odds - 1);
         };
 
         if (watchedOutcomeScenario === 'double_green') {
             profit = subBets.reduce((acc, bet) => {
                 return acc + getNetProfit(bet.stake, bet.odds, bet.isFreebet);
             }, 0);
+
         } else if (watchedOutcomeScenario === 'pa_hedge' && hedgeOdd && hedgeOdd > 1) {
-            // Assume the first bet is the P.A. bet that won.
-            const paBet = subBets[0];
-            const paBetProfit = getNetProfit(paBet.stake, paBet.odds, paBet.isFreebet);
-            
-            // Assume we use the full return of the P.A. bet to hedge.
-            const paBetReturn = paBet.isFreebet ? paBet.stake * (paBet.odds - 1) : paBet.stake * paBet.odds;
-            const hedgeStake = paBetReturn;
-            const hedgeProfit = hedgeStake * (hedgeOdd - 1);
-
-            // We subtract the stakes of the other initial bets that were lost.
-            const lostStakes = subBets.slice(1).reduce((acc, bet) => acc + (bet.isFreebet ? 0 : bet.stake), 0);
-
-            // Final Profit = (Profit from P.A. Bet) + (Profit from Hedge Bet) - (Cost of other initial bets)
-            // A simpler way: (Return from PA Bet) + (Return from Hedge) - (Total cost of ALL bets including hedge)
-            const initialCost = subBets.reduce((acc, bet) => acc + (bet.isFreebet ? 0 : bet.stake), 0);
-            
-            // Recalculating based on user's simpler logic: Profit = (Profit from PA leg) - (cost of hedge leg that lost)
-            // Let's assume the PA leg is the first one, and the hedge leg (lay bet) is the second one.
             const paLeg = subBets[0];
-            const otherLeg = subBets[1];
+            const hedgeStake = subBets.filter(b => !b.isFreebet).reduce((acc,b) => acc + b.stake, 0) / hedgeOdd;
             
-            if (paLeg && otherLeg) {
-                const paProfit = getNetProfit(paLeg.stake, paLeg.odds, paLeg.isFreebet);
-                
-                // If the second leg was a Lay bet on an exchange, its loss is its liability.
-                // For simplicity let's just assume it's a simple bet that lost.
-                const otherLegCost = otherLeg.isFreebet ? 0 : otherLeg.stake;
-                
-                // Now the hedge bet. Assume it was made with stake = paProfit, at hedgeOdd.
-                // And assume this hedge bet LOST, because the original result held.
-                // So, the final profit is the profit from the P.A. minus the lost stake from the hedge.
-                
-                // Let's follow the user's latest logic.
-                const paBetProfitFinal = getNetProfit(paLeg.stake, paLeg.odds, paLeg.isFreebet);
-                const hedgeStakeToMake = paBetProfitFinal / (hedgeOdd -1); // This is not right.
-                
-                // Let's use the simplest logic: you won the PA bet, then you made another bet.
-                // Profit = (Profit from PA bet) + (Profit/Loss from hedge bet).
-                const initialPaProfit = getNetProfit(subBets[0].stake, subBets[0].odds, subBets[0].isFreebet);
-                const initialInvestment = subBets.reduce((acc, b) => acc + (b.isFreebet ? 0 : b.stake), 0);
+            const paProfit = getNetProfit(paLeg.stake, paLeg.odds, paLeg.isFreebet);
+            const hedgeProfit = hedgeStake * (hedgeOdd - 1);
+            
+            // Assume other initial legs lost their stake
+            const otherLostStakes = subBets.slice(1).reduce((acc, bet) => acc + (bet.isFreebet ? 0 : bet.stake), 0);
 
-                // Let's use the formula from the image: Profit = (Stake * (Back_Odd -1)) - (Hedge_Stake * (Lay_Odd -1))
-                // This is for a back/lay.
-                // Let's try again with the user feedback.
-                // "o P.A A ODD TÁ 1.31... se apostarmos 500 ai é so dividir 500/pela odd por exemplo 500/1.31"
-                // This is the hedge STAKE. So, HedgeStake = InitialTotalStake / HedgeOdd.
-                const hedgeStakeAmount = initialInvestment / hedgeOdd;
-
-                // Profit = (Return from PA bet) - (Initial Investment) - (Hedge Stake).
-                // Return from PA bet = stake * odds.
-                profit = (subBets[0].stake * subBets[0].odds) - initialInvestment - hedgeStakeAmount;
-            }
-
+            profit = paProfit - otherLostStakes + hedgeProfit;
 
         } else { // standard
             profit = surebetCalculations.guaranteedProfit;
         }
         setValue('realizedProfit', profit);
     }
-}, [betToEdit, watchedType, watchedStatus, watchedOutcomeScenario, hedgeOdd, watchedSubBets, setValue, surebetCalculations]);
+}, [watchedStatus, watchedType, watchedSubBets, watchedOutcomeScenario, hedgeOdd, setValue, surebetCalculations, betToEdit]);
 
 
   const onSubmit = (data: z.infer<typeof betSchema>) => {
