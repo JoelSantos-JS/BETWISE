@@ -98,22 +98,24 @@ const calculateSurebet = (subBets: z.infer<typeof subBetSchema>[] | undefined) =
     const potentialReturns = subBets.map(bet => {
         const stake = bet.stake || 0;
         const odds = bet.odds || 0;
-        const freebetReturn = stake * (odds - 1);
-        const realMoneyReturn = stake * odds;
+        
+        let profitIfThisWins;
 
-        const otherRealMoneyStakes = subBets
-            .filter(other => !other.isFreebet && other.bookmaker !== bet.bookmaker)
-            .reduce((acc, s) => acc + (s.stake || 0), 0);
-        
         if (bet.isFreebet) {
-            return freebetReturn - otherRealMoneyStakes;
+            // Se esta for a freebet, o lucro é o retorno (stake * (odds - 1)) menos as outras apostas com dinheiro real
+            const otherRealMoneyStakes = subBets
+                .filter(other => !other.isFreebet && other.id !== bet.id)
+                .reduce((acc, s) => acc + (s.stake || 0), 0);
+            profitIfThisWins = (stake * (odds - 1)) - otherRealMoneyStakes;
+        } else {
+             // Se esta for uma aposta com dinheiro real, o lucro é o retorno (stake * odds) menos o total investido com dinheiro real
+            profitIfThisWins = (stake * odds) - totalStake;
         }
-        
-        return realMoneyReturn - totalStake;
+        return profitIfThisWins;
     });
 
     const guaranteedProfit = Math.min(...potentialReturns);
-    const profitPercentage = totalStake > 0 ? (guaranteedProfit / totalStake) * 100 : 0;
+    const profitPercentage = totalStake > 0 ? (guaranteedProfit / totalStake) * 100 : Infinity; // ROI infinito se não houver stake real
   
     return { totalStake, guaranteedProfit, profitPercentage };
 };

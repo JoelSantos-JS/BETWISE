@@ -38,11 +38,14 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
       return 0;
     }
 
-    if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
-      // In a surebet, the profit is guaranteed if one leg wins, regardless of which one.
-      // A "loss" status would imply an edge case like all legs being void or a miscalculation.
-      // We still show the guaranteed profit, as that's the intended outcome.
-      return bet.guaranteedProfit ?? 0;
+    if ((bet.type === 'surebet' || bet.type === 'pa_surebet') && bet.status === 'won') {
+        // Para surebets ganhas, o lucro é o lucro garantido calculado
+        // ou, se não estiver definido, um valor positivo para indicar ganho.
+        return bet.guaranteedProfit ?? 0;
+    }
+     if ((bet.type === 'surebet' || bet.type === 'pa_surebet') && bet.status === 'lost') {
+        // A "perda" numa surebet é o prejuízo máximo calculado, que ainda pode ser um "lucro" pequeno ou prejuízo real.
+        return bet.guaranteedProfit ?? -(bet.totalStake ?? 0);
     }
     
     return null;
@@ -190,7 +193,7 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
                 <statusInfo.icon className="w-4 h-4" />
                 <span>{statusInfo.label}</span>
                 {profit !== null && (
-                     <span className={cn("font-bold", profit < 0 && 'text-red-300', profit > 0 && (bet.type === 'surebet' || bet.type === 'pa_surebet') && 'text-green-300')}>
+                     <span className={cn("font-bold", profit < 0 && 'text-red-300', profit >= 0 && 'text-green-300')}>
                         ({profit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})
                     </span>
                 )}
