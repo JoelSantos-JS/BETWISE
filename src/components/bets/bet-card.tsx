@@ -34,6 +34,21 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
   const statusInfo = statusMap[bet.status];
   const scenarioInfo = bet.outcomeScenario ? scenarioMap[bet.outcomeScenario] : null;
   
+  // Verifica se esta aposta ganha um freebet
+  const earnedFreebet = bet.earnedFreebetValue && bet.earnedFreebetValue > 0;
+  
+  // Debug temporário - verificar dados da aposta
+  if (bet.event?.includes('MIRASSOL')) {
+    console.log('=== DEBUG APOSTA MIRASSOL ===');
+    console.log('Dados completos da aposta:', bet);
+    console.log('earnedFreebetValue:', bet.earnedFreebetValue);
+    console.log('Tipo de earnedFreebetValue:', typeof bet.earnedFreebetValue);
+    console.log('earnedFreebet (calculado):', earnedFreebet);
+    console.log('Status:', bet.status);
+    console.log('Condição completa (earnedFreebet && bet.status === "won"):', earnedFreebet && bet.status === 'won');
+    console.log('=== FIM DEBUG ===');
+  }
+  
   const profit = (() => {
     // Se o lucro final (realizedProfit) foi inserido manualmente, ele tem prioridade MÁXIMA.
     if (bet.realizedProfit !== null && bet.realizedProfit !== undefined) {
@@ -146,9 +161,18 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
                     </div>
                      <div>
                         <p className={cn("font-bold", ((bet.status === 'won' && bet.realizedProfit !== null && bet.realizedProfit !== undefined) ? bet.realizedProfit : (bet.guaranteedProfit ?? 0)) >= 0 ? "text-green-500" : "text-destructive")}>
-                            {((bet.status === 'won' && bet.realizedProfit !== null && bet.realizedProfit !== undefined) ? bet.realizedProfit : bet.guaranteedProfit)?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            {earnedFreebet && bet.status === 'won' ? (
+                                <span className="flex items-center gap-1">
+                                    <Gift className="w-4 h-4 text-yellow-500" />
+                                    Freebet {bet.earnedFreebetValue?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                </span>
+                            ) : (
+                                ((bet.status === 'won' && bet.realizedProfit !== null && bet.realizedProfit !== undefined) ? bet.realizedProfit : bet.guaranteedProfit)?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                            )}
                         </p>
-                        <p className="text-xs text-muted-foreground">{(bet.status === 'won' && bet.realizedProfit !== null && bet.realizedProfit !== undefined) ? 'Lucro Final' : 'Lucro Garantido'}</p>
+                        <p className="text-xs text-muted-foreground">
+                            {earnedFreebet && bet.status === 'won' ? 'Freebet Ganha' : (bet.status === 'won' && bet.realizedProfit !== null && bet.realizedProfit !== undefined) ? 'Lucro Final' : 'Lucro Garantido'}
+                        </p>
                     </div>
                      <div>
                         <p className={cn("font-bold", (bet.profitPercentage ?? 0) >= 0 ? "text-green-500" : "text-destructive")}>
@@ -203,7 +227,11 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
          <Badge className={`border-transparent text-white gap-1.5 ${statusInfo.color}`}>
                 <statusInfo.icon className="w-4 h-4" />
                 <span>{statusInfo.label}</span>
-                {profit !== null && (
+                {earnedFreebet && bet.status === 'won' ? (
+                    <span className="font-bold text-yellow-300 flex items-center gap-1">
+                        (<Gift className="w-3 h-3" /> {bet.earnedFreebetValue?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})
+                    </span>
+                ) : profit !== null && (
                      <span className={cn("font-bold", profit < 0 ? "text-red-300" : "text-green-300")}>
                         ({profit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})
                     </span>

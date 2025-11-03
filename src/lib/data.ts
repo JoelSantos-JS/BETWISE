@@ -86,6 +86,24 @@ export const INITIAL_BETS: Omit<Bet, 'date'> & { date: Date | string }[] = [
     odds: 1.91,
     status: 'pending',
     date: sub(new Date(), { hours: -2 }),
+  },
+  {
+    id: '8',
+    type: 'surebet',
+    sport: 'Futebol',
+    event: 'MIRASSOL X BOTAFOGO',
+    status: 'won',
+    date: sub(new Date(), { days: 1 }),
+    subBets: [
+        { id: '8a', bookmaker: 'BET365', betType: 'EMPATE', odds: 3.40, stake: 50.00, isFreebet: false },
+        { id: '8b', bookmaker: 'SUPERBET', betType: '+2.5', odds: 45.00, stake: 3.60, isFreebet: false },
+        { id: '8c', bookmaker: 'BETBRA', betType: 'CASA OU FORA', odds: 1.38, stake: 116.00, isFreebet: false },
+    ],
+    totalStake: 169.60,
+    guaranteedProfit: 0,
+    profitPercentage: 0,
+    earnedFreebetValue: 50,
+    notes: 'Surebet para ganhar freebet de R$ 50.',
   }
 ];
 

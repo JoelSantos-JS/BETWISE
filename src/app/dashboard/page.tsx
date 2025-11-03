@@ -788,7 +788,7 @@ export default function BetsPage() {
              </div>
 
              <h3 className="text-2xl font-bold mb-4">Minhas Apostas</h3>
-            <Tabs defaultValue="pending" onValueChange={setFilterStatus} className="w-full">
+            <Tabs defaultValue="all" onValueChange={setFilterStatus} className="w-full">
                 <TabsList className="grid w-full grid-cols-5 mb-6">
                     <TabsTrigger value="all">Todas</TabsTrigger>
                     <TabsTrigger value="pending">Em Andamento</TabsTrigger>
