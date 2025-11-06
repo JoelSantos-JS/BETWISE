@@ -362,8 +362,10 @@ export default function BetsPage() {
             return false;
         });
         
-        if (associatedBets.length > 0) {
-            toast({ variant: 'destructive', title: 'Ação Bloqueada', description: 'Não é possível excluir uma casa que possui apostas associadas.' });
+        // Só bloquear se houver apostas PENDENTES associadas a esta casa
+        const hasPendingAssociatedBets = associatedBets.some(b => b.status === 'pending');
+        if (hasPendingAssociatedBets) {
+            toast({ variant: 'destructive', title: 'Ação Bloqueada', description: 'Não é possível excluir uma casa que possui apostas pendentes.' });
             setBookmakerToDelete(null);
             return;
         }
