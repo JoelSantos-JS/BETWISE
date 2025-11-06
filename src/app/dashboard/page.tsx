@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Bet, Bookmaker as BookmakerType } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, BarChart, AlertTriangle, Save, TrendingUp, TrendingDown, Calculator, Wallet, Landmark, Building, FileDown, Loader2, Calendar, Filter } from 'lucide-react';
+import { PlusCircle, BarChart, AlertTriangle, Save, TrendingUp, TrendingDown, Calculator, Wallet, Landmark, Building, FileDown, Loader2, Calendar, Filter, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BetCard } from '@/components/bets/bet-card';
@@ -32,7 +32,7 @@ import { AdvancedSurebetCalculator } from '@/components/bets/advanced-surebet-ca
 import { TradingCalculator } from '@/components/bets/trading-calculator';
 import { startOfDay, startOfWeek, startOfMonth, endOfDay, endOfWeek, endOfMonth, isWithinInterval, format } from 'date-fns';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc, addDoc, Timestamp, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, setDoc, deleteDoc, addDoc, Timestamp, writeBatch } from 'firebase/firestore';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -58,6 +58,11 @@ export default function BetsPage() {
     const [isBookmakerFormOpen, setIsBookmakerFormOpen] = useState(false);
     const [bookmakerToEdit, setBookmakerToEdit] = useState<BookmakerType | null>(null);
     const [bookmakerToDelete, setBookmakerToDelete] = useState<BookmakerType | null>(null);
+    // Totais: override e diálogo
+    const [isTotalsDialogOpen, setIsTotalsDialogOpen] = useState(false);
+    const [totalsOverride, setTotalsOverride] = useState<{ initial?: number; current?: number } | null>(null);
+    const [overrideInitial, setOverrideInitial] = useState<string>("");
+    const [overrideCurrent, setOverrideCurrent] = useState<string>("");
 
     // Filter states
     const [filterStatus, setFilterStatus] = useState<string>("pending");
@@ -94,6 +99,23 @@ export default function BetsPage() {
             
             const bookmakersData = bookmakersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as BookmakerType);
             setBookmakers(bookmakersData);
+
+            // Carregar overrides de totais (configuração do dashboard)
+            try {
+                const settingsDocRef = doc(db, 'users', userId, 'settings', 'dashboard');
+                const settingsSnap = await getDoc(settingsDocRef);
+                if (settingsSnap.exists()) {
+                    const data = settingsSnap.data() as any;
+                    if (data?.totalsOverride) {
+                        setTotalsOverride({
+                            initial: typeof data.totalsOverride.initial === 'number' ? data.totalsOverride.initial : undefined,
+                            current: typeof data.totalsOverride.current === 'number' ? data.totalsOverride.current : undefined,
+                        });
+                    }
+                }
+            } catch (e) {
+                console.warn('Falha ao carregar configurações do dashboard.', e);
+            }
 
         } catch (error) {
             console.error("Error fetching user data:", error);
@@ -152,6 +174,42 @@ export default function BetsPage() {
             winRate: bets.length > 0 ? (bets.filter(b => b.status === 'won').length / bets.filter(b => ['won', 'lost'].includes(b.status)).length) * 100 : 0
         }
     }, [bets, bookmakers]);
+
+    // Valores exibidos com possíveis overrides
+    const displayInitialTotal = totalsOverride?.initial ?? summaryStats.totalInitialBankroll;
+    const displayCurrentTotal = totalsOverride?.current ?? summaryStats.currentBankroll;
+
+    const openTotalsDialog = () => {
+        setOverrideInitial(displayInitialTotal.toString());
+        setOverrideCurrent(displayCurrentTotal.toString());
+        setIsTotalsDialogOpen(true);
+    };
+
+    const handleSaveTotalsOverride = async () => {
+        if (!user) { toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado.' }); return; }
+        const parseNumber = (s: string) => {
+            // Aceita números com vírgula como decimal
+            const normalized = s.replace(/\./g, '').replace(',', '.');
+            const num = Number(normalized);
+            return isNaN(num) ? undefined : num;
+        };
+        const payload = {
+            totalsOverride: {
+                initial: parseNumber(overrideInitial),
+                current: parseNumber(overrideCurrent),
+            }
+        };
+        try {
+            const settingsDocRef = doc(db, 'users', user.uid, 'settings', 'dashboard');
+            await setDoc(settingsDocRef, payload, { merge: true });
+            setTotalsOverride(payload.totalsOverride);
+            toast({ title: 'Totais atualizados', description: 'Os valores foram ajustados com sucesso.' });
+            setIsTotalsDialogOpen(false);
+        } catch (error) {
+            console.error('Erro ao salvar overrides:', error);
+            toast({ variant: 'destructive', title: 'Erro ao salvar', description: 'Não foi possível salvar os novos valores.' });
+        }
+    };
 
     const filteredBets = useMemo(() => {
         let filtered = bets;
@@ -570,12 +628,15 @@ export default function BetsPage() {
                         <Wallet className="w-7 h-7 text-primary" />
                         Resumo Geral
                      </h3>
+                     <Button variant="outline" size="sm" onClick={openTotalsDialog}>
+                        <Pencil className="w-4 h-4 mr-2" /> Editar Totais
+                     </Button>
                 </div>
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                     <SummaryCard title="Banca Inicial Total" value={summaryStats.totalInitialBankroll} icon={Landmark} isCurrency />
-                     <SummaryCard title="Banca Atual Total" value={summaryStats.currentBankroll} icon={Wallet} isCurrency />
-                     <SummaryCard title="Lucro/Prejuízo Total" value={summaryStats.allTimeProfit} icon={summaryStats.allTimeProfit >= 0 ? TrendingUp : TrendingDown} isCurrency valueClassName={summaryStats.allTimeProfit >= 0 ? "text-green-500" : "text-destructive"} />
-                     <SummaryCard title="Total de Apostas" value={bets.length} icon={Landmark} />
+                    <SummaryCard title="Banca Inicial Total" value={displayInitialTotal} icon={Landmark} isCurrency />
+                    <SummaryCard title="Banca Atual Total" value={displayCurrentTotal} icon={Wallet} isCurrency />
+                    <SummaryCard title="Lucro/Prejuízo Total" value={summaryStats.allTimeProfit} icon={summaryStats.allTimeProfit >= 0 ? TrendingUp : TrendingDown} isCurrency valueClassName={summaryStats.allTimeProfit >= 0 ? "text-green-500" : "text-destructive"} />
+                    <SummaryCard title="Total de Apostas" value={bets.length} icon={Landmark} />
                 </div>
             </div>
 
@@ -622,10 +683,10 @@ export default function BetsPage() {
             </div>
 
              <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-8">
-                <div className="lg:col-span-3 h-[360px]">
+                <div className="lg:col-span-3 h-[240px] md:h-[360px]">
                     <BetPerformanceChart data={bets} isLoading={isLoading}/>
                 </div>
-                <div className="lg:col-span-2 h-[360px]">
+                <div className="lg:col-span-2 h-[240px] md:h-[360px]">
                     <BetStatusChart data={bets} isLoading={isLoading}/>
                 </div>
              </div>
@@ -791,7 +852,7 @@ export default function BetsPage() {
 
              <h3 className="text-2xl font-bold mb-4">Minhas Apostas</h3>
             <Tabs defaultValue="all" onValueChange={setFilterStatus} className="w-full">
-                <TabsList className="grid w-full grid-cols-5 mb-6">
+                <TabsList className="w-full mb-6 overflow-x-auto whitespace-nowrap flex gap-2">
                     <TabsTrigger value="all">Todas</TabsTrigger>
                     <TabsTrigger value="pending">Em Andamento</TabsTrigger>
                     <TabsTrigger value="won">Ganhos</TabsTrigger>
@@ -850,6 +911,29 @@ export default function BetsPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Edit Totals Dialog */}
+            <Dialog open={isTotalsDialogOpen} onOpenChange={(isOpen) => setIsTotalsDialogOpen(isOpen)}>
+                <DialogContent className="max-w-md">
+                    <CardHeader className="pb-2">
+                        <CardTitle>Editar Totais do Resumo</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="initial_total">Banca Inicial Total</Label>
+                            <Input id="initial_total" value={overrideInitial} onChange={e => setOverrideInitial(e.target.value)} placeholder={displayInitialTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="current_total">Banca Atual Total</Label>
+                            <Input id="current_total" value={overrideCurrent} onChange={e => setOverrideCurrent(e.target.value)} placeholder={displayCurrentTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                            <Button variant="ghost" onClick={() => setIsTotalsDialogOpen(false)}>Cancelar</Button>
+                            <Button onClick={handleSaveTotalsOverride}><Save className="w-4 h-4 mr-2" />Salvar</Button>
+                        </div>
+                    </CardContent>
+                </DialogContent>
+            </Dialog>
 
             {/* Delete Bookmaker Dialog */}
              <AlertDialog open={!!bookmakerToDelete} onOpenChange={(isOpen) => !isOpen && setBookmakerToDelete(null)}>

@@ -154,7 +154,7 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
             </>
         ) : (
             <>
-                <div className="grid grid-cols-3 gap-2 text-sm text-center">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm text-center">
                     <div>
                         <p className="font-bold">{bet.totalStake?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
                         <p className="text-xs text-muted-foreground">Total Apostado</p>
