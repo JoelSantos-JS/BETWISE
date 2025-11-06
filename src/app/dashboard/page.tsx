@@ -180,18 +180,45 @@ export default function BetsPage() {
     const displayCurrentTotal = totalsOverride?.current ?? summaryStats.currentBankroll;
 
     const openTotalsDialog = () => {
-        setOverrideInitial(displayInitialTotal.toString());
-        setOverrideCurrent(displayCurrentTotal.toString());
+        setOverrideInitial(displayInitialTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+        setOverrideCurrent(displayCurrentTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
         setIsTotalsDialogOpen(true);
+    };
+
+    const formatCurrencyInput = (s: string) => {
+        const digits = s.replace(/\D/g, '');
+        if (!digits) return '';
+        const n = Number(digits) / 100;
+        return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     };
 
     const handleSaveTotalsOverride = async () => {
         if (!user) { toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado.' }); return; }
         const parseNumber = (s: string) => {
-            // Aceita números com vírgula como decimal
-            const normalized = s.replace(/\./g, '').replace(',', '.');
-            const num = Number(normalized);
-            return isNaN(num) ? undefined : num;
+            if (!s) return undefined;
+            const raw = s.replace(/[^0-9.,]/g, '').trim();
+            if (!raw) return undefined;
+            const hasComma = raw.includes(',');
+            const hasDot = raw.includes('.');
+            // Se possuir vírgula, assumimos vírgula como separador decimal.
+            if (hasComma) {
+                // Remover pontos (separadores de milhar) e converter vírgula para ponto
+                const normalized = raw.replace(/\./g, '').replace(',', '.');
+                const n = Number(normalized);
+                return isNaN(n) ? undefined : n;
+            }
+            // Caso só tenha ponto, tratamos ponto como decimal
+            if (hasDot) {
+                const n = Number(raw);
+                return isNaN(n) ? undefined : n;
+            }
+            // Sem separadores: interpretar últimos 2 dígitos como centavos
+            const digits = raw.replace(/\D/g, '');
+            if (!digits) return undefined;
+            const integerPart = digits.slice(0, Math.max(0, digits.length - 2)) || '0';
+            const decimalPart = digits.slice(-2).padStart(2, '0');
+            const n = Number(`${integerPart}.${decimalPart}`);
+            return isNaN(n) ? undefined : n;
         };
         const payload = {
             totalsOverride: {
@@ -921,11 +948,21 @@ export default function BetsPage() {
                     <CardContent className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="initial_total">Banca Inicial Total</Label>
-                            <Input id="initial_total" value={overrideInitial} onChange={e => setOverrideInitial(e.target.value)} placeholder={displayInitialTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} />
+                            <Input id="initial_total" value={overrideInitial} onChange={e => setOverrideInitial(formatCurrencyInput(e.target.value))} onBlur={(e) => {
+                                const n = parseNumber(e.target.value);
+                                if (typeof n === 'number') {
+                                    setOverrideInitial(n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+                                }
+                            }} placeholder={displayInitialTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="current_total">Banca Atual Total</Label>
-                            <Input id="current_total" value={overrideCurrent} onChange={e => setOverrideCurrent(e.target.value)} placeholder={displayCurrentTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} />
+                            <Input id="current_total" value={overrideCurrent} onChange={e => setOverrideCurrent(formatCurrencyInput(e.target.value))} onBlur={(e) => {
+                                const n = parseNumber(e.target.value);
+                                if (typeof n === 'number') {
+                                    setOverrideCurrent(n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+                                }
+                            }} placeholder={displayCurrentTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} />
                         </div>
                         <div className="flex justify-end gap-2">
                             <Button variant="ghost" onClick={() => setIsTotalsDialogOpen(false)}>Cancelar</Button>
