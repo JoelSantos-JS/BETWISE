@@ -183,9 +183,8 @@ export default function BetsPage() {
 
     // Valores exibidos com possíveis overrides
     const displayInitialTotal = totalsOverride?.initial ?? summaryStats.totalInitialBankroll;
-    // Exibir a banca atual sempre como (banca inicial exibida) + lucro total
-    // Isso garante atualização automática mesmo se houver override de 'current'
-    const displayCurrentTotal = displayInitialTotal + summaryStats.allTimeProfit;
+    // Se houver override explícito para 'current', obedecer; caso contrário, somar lucro ao inicial exibido
+    const displayCurrentTotal = (totalsOverride?.current ?? (displayInitialTotal + summaryStats.allTimeProfit));
 
     const openTotalsDialog = () => {
         setOverrideInitial(displayInitialTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
