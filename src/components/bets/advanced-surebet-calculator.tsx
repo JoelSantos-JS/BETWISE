@@ -68,8 +68,8 @@ export function AdvancedSurebetCalculator() {
       totalToUse = calculateTotalForProfit(odds, desiredProfit);
     }
     
-    // Verifica se há stakes manuais
-    const hasManualStakes = betInputs.some(bet => bet.manualStake && bet.manualStake > 0);
+    // Verifica se há stakes manuais (qualquer valor definido ativa modo manual)
+    const hasManualStakes = betInputs.some(bet => bet.manualStake !== undefined && bet.manualStake !== null);
     
     if (hasManualStakes) {
       // Modo manual: calcula com stakes fornecidos
@@ -96,13 +96,14 @@ export function AdvancedSurebetCalculator() {
         S: odds.reduce((acc, o) => acc + 1/o, 0)
       };
     } else {
-      // Modo automático: usa a biblioteca
+      // Modo automático: usa a biblioteca, ignorando checagem de surebet
       return allocateStakes({
         odds,
         total: totalToUse,
         fees,
         minStake: minStakes,
-        maxStake: maxStakes
+        maxStake: maxStakes,
+        skipSurebetCheck: true
       });
     }
   }, [betInputs, totalInvestment, desiredProfit, useDesiredProfit]);
@@ -361,20 +362,20 @@ export function AdvancedSurebetCalculator() {
           {/* Resultados - Design Melhorado */}
           {calculation.ok ? (
             <div className="space-y-4">
-              {/* Status da Surebet */}
-              <Card className={`border-2 ${calculation.S! < 1 ? 'border-green-500 bg-gradient-to-r from-green-100/50 to-emerald-200/50 dark:from-green-900/30 dark:to-emerald-800/30' : 'border-red-500 bg-gradient-to-r from-red-100/50 to-rose-200/50 dark:from-red-900/30 dark:to-rose-800/30'}`}>
+              {/* Resultado (sem avaliar surebet): mostra porcentagem positiva/negativa */}
+              <Card className={`border-2 ${Number(calculation.roi) >= 0 ? 'border-green-500 bg-gradient-to-r from-green-100/50 to-emerald-200/50 dark:from-green-900/30 dark:to-emerald-800/30' : 'border-red-500 bg-gradient-to-r from-red-100/50 to-rose-200/50 dark:from-red-900/30 dark:to-rose-800/30'}`}>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-full ${calculation.S! < 1 ? 'bg-green-500' : 'bg-red-500'}`}>
+                      <div className={`p-2 rounded-full ${Number(calculation.roi) >= 0 ? 'bg-green-500' : 'bg-red-500'}`}>
                         <TrendingUp className="h-5 w-5 text-white" />
                       </div>
                       <div>
                         <h3 className="font-bold text-lg">
-                          {calculation.S! < 1 ? '✅ Surebet Detectada!' : '❌ Não é Surebet'}
+                          {Number(calculation.roi) >= 0 ? 'ROI Positivo' : 'ROI Negativo'}
                         </h3>
                         <div className="text-sm text-muted-foreground">
-                          Soma Inversa (S): <strong>{calculation.S?.toFixed(6)}</strong>
+                          ROI Real: <strong>{calculation.roi?.toFixed(2)}%</strong>
                           {calculation.ok && 'isManual' in calculation && calculation.isManual && <Badge variant="secondary" className="ml-2">Modo Manual</Badge>}
                         </div>
                       </div>

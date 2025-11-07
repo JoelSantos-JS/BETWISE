@@ -30,7 +30,8 @@ export function allocateStakes({
   fees = [],
   minStake = [],
   maxStake = [],
-  maxIterations = 500
+  maxIterations = 500,
+  skipSurebetCheck = false
 }: {
   odds: number[];
   total: number;
@@ -38,12 +39,14 @@ export function allocateStakes({
   minStake?: (number | null)[];
   maxStake?: (number | null)[];
   maxIterations?: number;
+  skipSurebetCheck?: boolean;
 }) {
   const n = odds.length;
   const feesDec = Array.from({ length: n }, (_, i) => (fees[i] || 0) / 100);
 
   const { S, isSurebet } = checkSurebet(odds);
-  if (!isSurebet) {
+  // Se não for surebet e estiver permitido pular a checagem, seguimos mesmo assim
+  if (!isSurebet && !skipSurebetCheck) {
     return { ok: false, reason: `Não é surebet (S=${S.toFixed(6)} ≥ 1)` };
   }
 
@@ -177,7 +180,8 @@ export function allocateStakes({
     returnsLiquidos: finalReturnsNet,
     menorRetorno: Math.min(...finalReturnsNet),
     lucro: best.lucro,
-    roi: best.roi
+    roi: best.roi,
+    isSurebet
   };
 }
 
