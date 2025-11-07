@@ -183,7 +183,9 @@ export default function BetsPage() {
 
     // Valores exibidos com possíveis overrides
     const displayInitialTotal = totalsOverride?.initial ?? summaryStats.totalInitialBankroll;
-    const displayCurrentTotal = totalsOverride?.current ?? summaryStats.currentBankroll;
+    // Exibir a banca atual sempre como (banca inicial exibida) + lucro total
+    // Isso garante atualização automática mesmo se houver override de 'current'
+    const displayCurrentTotal = displayInitialTotal + summaryStats.allTimeProfit;
 
     const openTotalsDialog = () => {
         setOverrideInitial(displayInitialTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
@@ -198,34 +200,32 @@ export default function BetsPage() {
         return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     };
 
+    // Converte string em formatos BR/US para número
+    const parseNumber = (s: string): number | undefined => {
+        if (!s) return undefined;
+        const raw = s.replace(/[^0-9.,]/g, '').trim();
+        if (!raw) return undefined;
+        const hasComma = raw.includes(',');
+        const hasDot = raw.includes('.');
+        if (hasComma) {
+            const normalized = raw.replace(/\./g, '').replace(',', '.');
+            const n = Number(normalized);
+            return isNaN(n) ? undefined : n;
+        }
+        if (hasDot) {
+            const n = Number(raw);
+            return isNaN(n) ? undefined : n;
+        }
+        const digits = raw.replace(/\D/g, '');
+        if (!digits) return undefined;
+        const integerPart = digits.slice(0, Math.max(0, digits.length - 2)) || '0';
+        const decimalPart = digits.slice(-2).padStart(2, '0');
+        const n = Number(`${integerPart}.${decimalPart}`);
+        return isNaN(n) ? undefined : n;
+    };
+
     const handleSaveTotalsOverride = async () => {
         if (!user) { toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado.' }); return; }
-        const parseNumber = (s: string) => {
-            if (!s) return undefined;
-            const raw = s.replace(/[^0-9.,]/g, '').trim();
-            if (!raw) return undefined;
-            const hasComma = raw.includes(',');
-            const hasDot = raw.includes('.');
-            // Se possuir vírgula, assumimos vírgula como separador decimal.
-            if (hasComma) {
-                // Remover pontos (separadores de milhar) e converter vírgula para ponto
-                const normalized = raw.replace(/\./g, '').replace(',', '.');
-                const n = Number(normalized);
-                return isNaN(n) ? undefined : n;
-            }
-            // Caso só tenha ponto, tratamos ponto como decimal
-            if (hasDot) {
-                const n = Number(raw);
-                return isNaN(n) ? undefined : n;
-            }
-            // Sem separadores: interpretar últimos 2 dígitos como centavos
-            const digits = raw.replace(/\D/g, '');
-            if (!digits) return undefined;
-            const integerPart = digits.slice(0, Math.max(0, digits.length - 2)) || '0';
-            const decimalPart = digits.slice(-2).padStart(2, '0');
-            const n = Number(`${integerPart}.${decimalPart}`);
-            return isNaN(n) ? undefined : n;
-        };
         const payload = {
             totalsOverride: {
                 initial: parseNumber(overrideInitial),
@@ -297,18 +297,24 @@ export default function BetsPage() {
         // Filter by profit
         if (profitFilter !== 'all') {
             filtered = filtered.filter(bet => {
-                let profit = 0;
-                
-                if (bet.realizedProfit !== undefined) {
+                let profit: number = 0;
+
+                if (bet.realizedProfit != null) {
                     profit = bet.realizedProfit;
                 } else if (bet.status === 'won') {
                     if (bet.type === 'single') {
-                        profit = (bet.stake * bet.odds) - bet.stake;
+                        const stake = bet.stake ?? 0;
+                        const odds = bet.odds ?? 0;
+                        profit = (stake * odds) - stake;
                     } else {
-                        profit = bet.guaranteedProfit || 0;
+                        profit = bet.guaranteedProfit ?? 0;
                     }
                 } else if (bet.status === 'lost') {
-                    profit = bet.type === 'single' ? -bet.stake : -(bet.totalStake || bet.stake);
+                    if (bet.type === 'single') {
+                        profit = -(bet.stake ?? 0);
+                    } else {
+                        profit = -(bet.totalStake ?? 0);
+                    }
                 }
 
                 switch (profitFilter) {
