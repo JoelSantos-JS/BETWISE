@@ -27,6 +27,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { SurebetCalculator } from '@/components/bets/surebet-calculator';
 import { AdvancedSurebetCalculator } from '@/components/bets/advanced-surebet-calculator';
 import { TradingCalculator } from '@/components/bets/trading-calculator';
@@ -67,6 +68,7 @@ export default function BetsPage() {
     // Filter states
     const [filterStatus, setFilterStatus] = useState<string>("pending");
     const [dateFilter, setDateFilter] = useState<string>("all");
+    const [dayFilter, setDayFilter] = useState<number[]>([]); // 0=Dom, 6=Sáb
     const [customDateStart, setCustomDateStart] = useState<string>("");
     const [customDateEnd, setCustomDateEnd] = useState<string>("");
     const [profitFilter, setProfitFilter] = useState<string>("all");
@@ -293,6 +295,14 @@ export default function BetsPage() {
             });
         }
 
+        // Filter by day of week (multi-select): if none selected, keep all
+        if (dayFilter.length > 0) {
+            filtered = filtered.filter(bet => {
+                const d = new Date(bet.date).getDay(); // 0=Dom
+                return dayFilter.includes(d);
+            });
+        }
+
         // Filter by profit
         if (profitFilter !== 'all') {
             filtered = filtered.filter(bet => {
@@ -332,7 +342,7 @@ export default function BetsPage() {
         }
 
         return filtered;
-    }, [bets, filterStatus, dateFilter, customDateStart, customDateEnd, profitFilter, minProfit, maxProfit]);
+    }, [bets, filterStatus, dateFilter, customDateStart, customDateEnd, profitFilter, minProfit, maxProfit, dayFilter]);
 
     // Filtered statistics
     const filteredStats = useMemo(() => {
@@ -737,7 +747,7 @@ export default function BetsPage() {
              </div>
              
              {/* Filtered Statistics */}
-             {(dateFilter !== 'all' || profitFilter !== 'all') && (
+            {(dateFilter !== 'all' || profitFilter !== 'all' || dayFilter.length > 0) && (
                 <div className="mb-6">
                     <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
                         <BarChart className="h-5 w-5" />
@@ -822,6 +832,35 @@ export default function BetsPage() {
                         )}
                     </div>
 
+                    {/* Day of Week Filter */}
+                    <div className="space-y-2">
+                        <Label className="flex items-center gap-2">
+                            Dias da Semana
+                        </Label>
+                        <div className="grid grid-cols-7 gap-2">
+                            {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((label, idx) => (
+                                <div key={label} className="flex items-center gap-1">
+                                    <Checkbox
+                                        checked={dayFilter.includes(idx)}
+                                        onCheckedChange={(checked) => {
+                                            setDayFilter(prev => {
+                                                const isChecked = !!checked;
+                                                if (isChecked) return [...prev, idx];
+                                                return prev.filter(d => d !== idx);
+                                            });
+                                        }}
+                                    />
+                                    <span className="text-xs">{label}</span>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex gap-2 mt-2">
+                            <Button variant="outline" size="sm" onClick={() => setDayFilter([1,2,3,4,5])}>Dias úteis</Button>
+                            <Button variant="outline" size="sm" onClick={() => setDayFilter([0,6])}>Finais de semana</Button>
+                            <Button variant="ghost" size="sm" onClick={() => setDayFilter([])}>Todos</Button>
+                        </div>
+                    </div>
+
                     {/* Profit Filter */}
                     <div className="space-y-2">
                         <Label htmlFor="profit-filter" className="flex items-center gap-2">
@@ -879,6 +918,7 @@ export default function BetsPage() {
                             onClick={() => {
                                 setDateFilter('all');
                                 setProfitFilter('all');
+                                setDayFilter([]);
                                 setCustomDateStart('');
                                 setCustomDateEnd('');
                                 setMinProfit('');
