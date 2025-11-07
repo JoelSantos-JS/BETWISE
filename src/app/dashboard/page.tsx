@@ -143,25 +143,31 @@ export default function BetsPage() {
         const totalInitialBankroll = bookmakers.reduce((acc, b) => acc + b.initialBankroll, 0);
 
         const allTimeProfit = bets.reduce((acc, bet) => {
-             if (bet.status !== 'won' && bet.status !== 'lost') return acc;
+            // Ignorar pendentes e anuladas; considerar cashout via realizedProfit
+            if (bet.status === 'pending' || bet.status === 'void') return acc;
 
-             if (bet.type === 'single') {
+            // Se houver realizedProfit, sempre priorizar (cobre cashout e ajustes manuais)
+            if (bet.realizedProfit !== null && bet.realizedProfit !== undefined) {
+                return acc + bet.realizedProfit;
+            }
+
+            if (bet.type === 'single') {
                 const stake = bet.stake ?? 0;
                 const odds = bet.odds ?? 0;
                 if (bet.status === 'won') return acc + (stake * odds) - stake;
                 if (bet.status === 'lost') return acc - stake;
-             } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
-                 // Para surebets, usa o realizedProfit se disponível (lucro final inserido manualmente)
-                 // Caso contrário, usa o guaranteedProfit (cálculo automático)
-                 if (bet.status === 'won') {
-                     const profitToUse = (bet.realizedProfit !== null && bet.realizedProfit !== undefined) 
-                         ? bet.realizedProfit 
-                         : bet.guaranteedProfit;
-                     return acc + (profitToUse ?? 0);
-                 }
-                 if (bet.status === 'lost') return acc - (bet.totalStake ?? 0);
-             }
-             return acc;
+                // cash out sem realizedProfit explícito não altera lucro
+                return acc;
+            } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+                if (bet.status === 'won') {
+                    const profitToUse = bet.guaranteedProfit ?? 0;
+                    return acc + profitToUse;
+                }
+                if (bet.status === 'lost') return acc - (bet.totalStake ?? 0);
+                // cash out sem realizedProfit explícito não altera lucro
+                return acc;
+            }
+            return acc;
         }, 0);
 
         const currentBankroll = totalInitialBankroll + allTimeProfit;
@@ -326,18 +332,25 @@ export default function BetsPage() {
     // Filtered statistics
     const filteredStats = useMemo(() => {
         const filteredProfit = filteredBets.reduce((acc, bet) => {
+            if (bet.status === 'pending' || bet.status === 'void') return acc;
+
+            if (bet.realizedProfit !== null && bet.realizedProfit !== undefined) {
+                return acc + bet.realizedProfit;
+            }
+
             if (bet.type === 'single') {
-                const stake = bet.stake;
-                if (bet.status === 'won') return acc + (stake * bet.odds) - stake;
+                const stake = bet.stake ?? 0;
+                const odds = bet.odds ?? 0;
+                if (bet.status === 'won') return acc + (stake * odds) - stake;
                 if (bet.status === 'lost') return acc - stake;
+                return acc; // cash out sem realizedProfit
             } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
                 if (bet.status === 'won') {
-                    const profitToUse = (bet.realizedProfit !== null && bet.realizedProfit !== undefined) 
-                        ? bet.realizedProfit 
-                        : bet.guaranteedProfit;
-                    return acc + (profitToUse ?? 0);
+                    const profitToUse = bet.guaranteedProfit ?? 0;
+                    return acc + profitToUse;
                 }
                 if (bet.status === 'lost') return acc - (bet.totalStake ?? 0);
+                return acc; // cash out sem realizedProfit
             }
             return acc;
         }, 0);
