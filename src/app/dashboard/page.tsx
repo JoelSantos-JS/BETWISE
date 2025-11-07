@@ -370,6 +370,113 @@ export default function BetsPage() {
             return acc;
         }, 0);
 
+        // Total apostado no período filtrado (somando stakes de singles e surebets)
+        const totalStaked = filteredBets.reduce((sum, bet) => {
+            if (bet.type === 'single') {
+                return sum + (bet.stake ?? 0);
+            }
+            if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+                const combinedPaidStake = bet.subBets
+                    ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                    : (bet.totalStake ?? 0);
+                return sum + combinedPaidStake;
+            }
+            return sum;
+        }, 0);
+
+        // Possível ganho do período (lucro potencial):
+        // - Se houver realizedProfit, usa-se este valor
+        // - Se 'won', calcula lucro realizado
+        // - Se 'lost' ou 'void', 0
+        // - Se 'pending', calcula lucro potencial: single => stake*(odds-1);
+        //   surebet => max( sub.stake*sub.odds - totalStake )
+        const potentialGain = filteredBets.reduce((sum, bet) => {
+            if (bet.realizedProfit !== null && bet.realizedProfit !== undefined) {
+                return sum + bet.realizedProfit;
+            }
+
+            if (bet.type === 'single') {
+                const stake = bet.stake ?? 0;
+                const odds = bet.odds ?? 0;
+                if (bet.status === 'won') {
+                    return sum + (stake * odds) - stake;
+                }
+                if (bet.status === 'lost' || bet.status === 'void') {
+                    return sum;
+                }
+                // pending/cashed_out sem realizedProfit: lucro potencial teórico
+                return sum + Math.max(stake * (odds - 1), 0);
+            }
+
+            if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+                const combinedPaidStake = bet.subBets
+                    ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                    : (bet.totalStake ?? 0);
+                if (bet.status === 'won') {
+                    const profitToUse = bet.guaranteedProfit ?? 0;
+                    return sum + profitToUse;
+                }
+                if (bet.status === 'lost' || bet.status === 'void') {
+                    return sum;
+                }
+                // pending/cashed_out sem realizedProfit: lucro potencial máximo entre os desfechos
+                const maxOutcomeProfit = (bet.subBets ?? []).reduce((maxP, sb) => {
+                    const stake = sb.stake ?? 0;
+                    const odds = sb.odds ?? 0;
+                    const payoutMinusCosts = sb.isFreebet ? (stake * (odds - 1)) - combinedPaidStake : (stake * odds) - combinedPaidStake;
+                    return Math.max(maxP, payoutMinusCosts);
+                }, 0);
+                return sum + Math.max(maxOutcomeProfit, 0);
+            }
+            return sum;
+        }, 0);
+
+        // Retorno potencial (payout total creditado):
+        const potentialPayout = filteredBets.reduce((sum, bet) => {
+            if (bet.realizedProfit !== null && bet.realizedProfit !== undefined) {
+                // sem perder fidelidade: payout ≈ lucro + custo
+                if (bet.type === 'single') {
+                    const stake = bet.stake ?? 0;
+                    return sum + (bet.realizedProfit + stake);
+                }
+                const combinedPaidStake = bet.subBets
+                    ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                    : (bet.totalStake ?? 0);
+                return sum + (bet.realizedProfit + combinedPaidStake);
+            }
+
+            if (bet.type === 'single') {
+                const stake = bet.stake ?? 0;
+                const odds = bet.odds ?? 0;
+                if (bet.status === 'won' || bet.status === 'pending' || bet.status === 'cashed_out') {
+                    return sum + (stake * odds);
+                }
+                return sum;
+            }
+
+            if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+                const combinedPaidStake = bet.subBets
+                    ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                    : (bet.totalStake ?? 0);
+                if (bet.status === 'won') {
+                    const profitToUse = bet.guaranteedProfit ?? 0;
+                    return sum + (profitToUse + combinedPaidStake);
+                }
+                if (bet.status === 'lost' || bet.status === 'void') {
+                    return sum;
+                }
+                // pending: melhor retorno potencial (apenas crédito da perna vencedora)
+                const maxOutcomeReturn = (bet.subBets ?? []).reduce((maxR, sb) => {
+                    const stake = sb.stake ?? 0;
+                    const odds = sb.odds ?? 0;
+                    const credited = sb.isFreebet ? (stake * (odds - 1)) : (stake * odds);
+                    return Math.max(maxR, credited);
+                }, 0);
+                return sum + Math.max(maxOutcomeReturn, 0);
+            }
+            return sum;
+        }, 0);
+
         const filteredWinRate = filteredBets.length > 0 ? 
             (filteredBets.filter(b => b.status === 'won').length / filteredBets.filter(b => ['won', 'lost'].includes(b.status)).length) * 100 : 0;
 
@@ -379,9 +486,104 @@ export default function BetsPage() {
             winRate: filteredWinRate,
             wonBets: filteredBets.filter(b => b.status === 'won').length,
             lostBets: filteredBets.filter(b => b.status === 'lost').length,
-            pendingBets: filteredBets.filter(b => b.status === 'pending').length
+            pendingBets: filteredBets.filter(b => b.status === 'pending').length,
+            totalStaked,
+            potentialGain,
+            potentialPayout
         };
     }, [filteredBets]);
+
+    // Daily breakdown (apostas por dia)
+    const dailyStats = useMemo(() => {
+        const labels = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+        const byDay = Array.from({ length: 7 }, (_, i) => ({
+            day: i,
+            label: labels[i],
+            totalStaked: 0,
+            potentialGain: 0,
+            potentialPayout: 0,
+            count: 0,
+        }));
+
+        for (const bet of filteredBets) {
+            const idx = new Date(bet.date).getDay();
+            const bucket = byDay[idx];
+
+            // staked
+            if (bet.type === 'single') {
+                bucket.totalStaked += (bet.stake ?? 0);
+            } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+                const combinedPaidStake = bet.subBets
+                    ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                    : (bet.totalStake ?? 0);
+                bucket.totalStaked += combinedPaidStake;
+            }
+
+            // potential gain
+            if (bet.realizedProfit != null) {
+                bucket.potentialGain += bet.realizedProfit;
+            } else if (bet.type === 'single') {
+                const stake = bet.stake ?? 0;
+                const odds = bet.odds ?? 0;
+                if (bet.status === 'won') bucket.potentialGain += (stake * odds) - stake;
+                else if (bet.status === 'lost' || bet.status === 'void') ;
+                else bucket.potentialGain += Math.max(stake * (odds - 1), 0);
+            } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+                const combinedPaidStake = bet.subBets
+                    ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                    : (bet.totalStake ?? 0);
+                if (bet.status === 'won') bucket.potentialGain += (bet.guaranteedProfit ?? 0);
+                else if (bet.status === 'lost' || bet.status === 'void') ;
+                else {
+                    const maxOutcomeProfit = (bet.subBets ?? []).reduce((maxP, sb) => {
+                        const stake = sb.stake ?? 0;
+                        const odds = sb.odds ?? 0;
+                        const profit = sb.isFreebet ? (stake * (odds - 1)) - combinedPaidStake : (stake * odds) - combinedPaidStake;
+                        return Math.max(maxP, profit);
+                    }, 0);
+                    bucket.potentialGain += Math.max(maxOutcomeProfit, 0);
+                }
+            }
+
+            // potential payout
+            if (bet.realizedProfit != null) {
+                if (bet.type === 'single') {
+                    const stake = bet.stake ?? 0;
+                    bucket.potentialPayout += bet.realizedProfit + stake;
+                } else {
+                    const combinedPaidStake = bet.subBets
+                        ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                        : (bet.totalStake ?? 0);
+                    bucket.potentialPayout += bet.realizedProfit + combinedPaidStake;
+                }
+            } else if (bet.type === 'single') {
+                const stake = bet.stake ?? 0;
+                const odds = bet.odds ?? 0;
+                if (bet.status === 'won' || bet.status === 'pending' || bet.status === 'cashed_out') bucket.potentialPayout += stake * odds;
+            } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+                if (bet.status === 'won') {
+                    const combinedPaidStake = bet.subBets
+                        ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                        : (bet.totalStake ?? 0);
+                    bucket.potentialPayout += (bet.guaranteedProfit ?? 0) + combinedPaidStake;
+                } else if (bet.status === 'pending' || bet.status === 'cashed_out') {
+                    const maxOutcomeReturn = (bet.subBets ?? []).reduce((maxR, sb) => {
+                        const stake = sb.stake ?? 0;
+                        const odds = sb.odds ?? 0;
+                        const credited = sb.isFreebet ? (stake * (odds - 1)) : (stake * odds);
+                        return Math.max(maxR, credited);
+                    }, 0);
+                    bucket.potentialPayout += Math.max(maxOutcomeReturn, 0);
+                }
+            }
+
+            bucket.count += 1;
+        }
+
+        const daysToShow = (dayFilter.length > 0 ? dayFilter : byDay.map(d => d.day))
+            .filter(d => byDay[d].count > 0);
+        return byDay.filter(d => daysToShow.includes(d.day));
+    }, [filteredBets, dayFilter]);
     
     // CRUD Handlers for Bets
     const handleOpenBetForm = (bet: Bet | null = null) => {
@@ -753,7 +955,7 @@ export default function BetsPage() {
                         <BarChart className="h-5 w-5" />
                         Estatísticas do Período Filtrado
                     </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
                         <SummaryCard
                             title="Total de Apostas"
                             value={filteredStats.totalBets}
@@ -778,9 +980,64 @@ export default function BetsPage() {
                             value={`${filteredStats.wonBets}/${filteredStats.lostBets}`}
                             icon={Calculator}
                         />
+                        <SummaryCard
+                            title="Valor Apostado"
+                            value={filteredStats.totalStaked}
+                            icon={Wallet}
+                            isCurrency
+                        />
+                        <SummaryCard
+                            title="Possível Ganho"
+                            value={filteredStats.potentialGain}
+                            icon={TrendingUp}
+                            isCurrency
+                            valueClassName={filteredStats.potentialGain >= 0 ? "text-green-500" : "text-destructive"}
+                        />
+                        <SummaryCard
+                            title="Retorno Potencial"
+                            value={filteredStats.potentialPayout}
+                            icon={Wallet}
+                            isCurrency
+                            valueClassName={filteredStats.potentialPayout >= 0 ? "text-green-500" : "text-destructive"}
+                        />
                     </div>
                 </div>
              )}
+
+            {/* Daily Breakdown Cards */}
+            {(dateFilter !== 'all' || profitFilter !== 'all' || dayFilter.length > 0) && dailyStats.length > 0 && (
+                <div className="mb-6">
+                    <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <Calendar className="h-5 w-5" />
+                        Resumo por Dia
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {dailyStats.map(d => (
+                            <Card key={d.day}>
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-base">{d.label}</CardTitle>
+                                </CardHeader>
+                                <CardContent className="pt-0">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <div className="text-xs text-muted-foreground">Apostado</div>
+                                            <div className="text-sm font-semibold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(d.totalStaked)}</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-xs text-muted-foreground">Possível Ganho</div>
+                                            <div className={`text-sm font-semibold ${d.potentialGain >= 0 ? 'text-green-500' : 'text-destructive'}`}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(d.potentialGain)}</div>
+                                        </div>
+                                    </div>
+                                    <div className="mt-2">
+                                        <div className="text-xs text-muted-foreground">Retorno Potencial</div>
+                                        <div className={`text-sm font-semibold ${d.potentialPayout >= 0 ? 'text-green-500' : 'text-destructive'}`}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(d.potentialPayout)}</div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                </div>
+            )}
 
              {/* Filters Section */}
              <div className="mb-6">
@@ -837,7 +1094,7 @@ export default function BetsPage() {
                         <Label className="flex items-center gap-2">
                             Dias da Semana
                         </Label>
-                        <div className="grid grid-cols-7 gap-2">
+                        <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
                             {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((label, idx) => (
                                 <div key={label} className="flex items-center gap-1">
                                     <Checkbox

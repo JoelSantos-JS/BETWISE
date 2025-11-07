@@ -1,7 +1,7 @@
 import type { Bet } from './types';
 import { sub } from 'date-fns';
 
-export const INITIAL_BETS: Omit<Bet, 'date'> & { date: Date | string }[] = [
+export const INITIAL_BETS: (Omit<Bet, 'date'> & { date: Date | string })[] = [
   {
     id: '1',
     type: 'single',
