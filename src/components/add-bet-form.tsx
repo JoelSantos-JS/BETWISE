@@ -1,5 +1,6 @@
 'use client';
 
+import React, { useMemo, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
@@ -30,6 +31,9 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { SPORTS } from '@/lib/data';
 import type { BetResult, Sport } from '@/lib/types';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 
 const formSchema = z.object({
   date: z.date({
@@ -61,6 +65,40 @@ export function AddBetForm() {
   const { addBet } = useBets();
   const { toast } = useToast();
 
+  // Estado para a aba de Giros Grátis
+  const [spins, setSpins] = useState<number>(10);
+  const [spinValue, setSpinValue] = useState<number>(1.0);
+  const [rtp, setRtp] = useState<number>(96.0); // %
+  const [rollover, setRollover] = useState<number>(0); // x sobre ganhos
+  const [contrib, setContrib] = useState<number>(100); // % contribuição para rollover
+  const [taxRate, setTaxRate] = useState<number>(0); // % taxas/impostos
+
+  const freeSpinsCalc = useMemo(() => {
+    const nominal = Math.max(0, spins) * Math.max(0, spinValue);
+    const r = Math.max(0, Math.min(100, rtp)) / 100; // 0..1
+    const c = Math.max(1e-6, Math.max(1, rollover));
+    const contribFactor = Math.max(1e-6, Math.max(0.01, contrib / 100)); // evita divisão por zero
+    const tax = Math.max(0, Math.min(100, taxRate)) / 100;
+
+    const expectedGross = nominal * r; // ganho esperado dos giros
+    const wageringVolume = expectedGross * c / contribFactor; // volume necessário para limpar rollover
+    const rolloverCost = wageringVolume * (1 - r); // custo esperado (edge da casa) para cumprir rollover
+    const netBeforeTax = expectedGross - rolloverCost;
+    const netAfterTax = netBeforeTax * (1 - tax);
+    const yieldPct = nominal > 0 ? (netAfterTax / nominal) * 100 : (netAfterTax > 0 ? 100 : 0);
+
+    return {
+      nominal,
+      expectedGross,
+      wageringVolume,
+      rolloverCost,
+      netBeforeTax,
+      netAfterTax,
+      yieldPct,
+      positive: netAfterTax >= 0
+    };
+  }, [spins, spinValue, rtp, rollover, contrib, taxRate]);
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -90,8 +128,15 @@ export function AddBetForm() {
   }
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+    <Tabs defaultValue="bet" className="space-y-6">
+      <TabsList className="w-full md:w-auto">
+        <TabsTrigger value="bet">Adicionar Aposta</TabsTrigger>
+        <TabsTrigger value="free-spins">Giros Grátis</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="bet">
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <FormField
             control={form.control}
@@ -254,7 +299,85 @@ export function AddBetForm() {
         <Button type="submit" size="lg" className="w-full md:w-auto">
             Add Bet
         </Button>
-      </form>
-    </Form>
+          </form>
+        </Form>
+      </TabsContent>
+
+      <TabsContent value="free-spins" className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Calculadora de Giros Grátis</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Número de Giros</Label>
+                <Input type="number" min={0} value={spins} onChange={(e) => setSpins(Number(e.target.value))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Valor por Giro (R$)</Label>
+                <Input type="number" step="0.01" min={0} value={spinValue} onChange={(e) => setSpinValue(Number(e.target.value))} />
+              </div>
+              <div className="space-y-2">
+                <Label>RTP do Slot (%)</Label>
+                <Input type="number" step="0.1" min={0} max={100} value={rtp} onChange={(e) => setRtp(Number(e.target.value))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Rollover sobre ganhos (x)</Label>
+                <Input type="number" step="1" min={0} value={rollover} onChange={(e) => setRollover(Number(e.target.value))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Contribuição para rollover (%)</Label>
+                <Input type="number" step="1" min={1} max={100} value={contrib} onChange={(e) => setContrib(Number(e.target.value))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Taxas/Impostos (%)</Label>
+                <Input type="number" step="0.1" min={0} max={100} value={taxRate} onChange={(e) => setTaxRate(Number(e.target.value))} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <Card className={freeSpinsCalc.positive ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white'}>
+                <CardContent className="p-4 text-center">
+                  <p className="text-xs opacity-90 mb-1">Lucro Estimado Líquido</p>
+                  <p className="text-xl font-bold">R$ {freeSpinsCalc.netAfterTax.toFixed(2)}</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-blue-600 text-white">
+                <CardContent className="p-4 text-center">
+                  <p className="text-xs opacity-90 mb-1">Yield vs Valor Nominal</p>
+                  <p className="text-xl font-bold">{freeSpinsCalc.yieldPct.toFixed(2)}%</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-purple-600 text-white">
+                <CardContent className="p-4 text-center">
+                  <p className="text-xs opacity-90 mb-1">Ganho Esperado Bruto</p>
+                  <p className="text-xl font-bold">R$ {freeSpinsCalc.expectedGross.toFixed(2)}</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-orange-600 text-white">
+                <CardContent className="p-4 text-center">
+                  <p className="text-xs opacity-90 mb-1">Custo p/ Rollover</p>
+                  <p className="text-xl font-bold">R$ {freeSpinsCalc.rolloverCost.toFixed(2)}</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="p-3 rounded border bg-muted/40">
+                <p className="text-sm text-muted-foreground">Valor nominal dos giros</p>
+                <p className="text-lg font-bold">R$ {freeSpinsCalc.nominal.toFixed(2)}</p>
+              </div>
+              <div className="p-3 rounded border bg-muted/40">
+                <p className="text-sm text-muted-foreground">Volume de rollover (estimado)</p>
+                <p className="text-lg font-bold">R$ {freeSpinsCalc.wageringVolume.toFixed(2)}</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">Estimativa simplificada: usa RTP e supõe mesma vantagem da casa durante o rollover. Resultados reais podem variar por regras de bônus e jogo utilizado.</p>
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
   );
 }
