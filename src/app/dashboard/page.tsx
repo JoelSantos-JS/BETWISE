@@ -480,6 +480,20 @@ export default function BetsPage() {
         const filteredWinRate = filteredBets.length > 0 ? 
             (filteredBets.filter(b => b.status === 'won').length / filteredBets.filter(b => ['won', 'lost'].includes(b.status)).length) * 100 : 0;
 
+        const lossAmount = filteredBets.reduce((sum, bet) => {
+            if (bet.status !== 'lost') return sum;
+            if (bet.type === 'single') return sum + (bet.stake ?? 0);
+            if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+                const combinedPaidStake = bet.subBets
+                    ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                    : (bet.totalStake ?? 0);
+                return sum + combinedPaidStake;
+            }
+            return sum;
+        }, 0);
+
+        const finalBalance = potentialPayout - totalStaked;
+
         return {
             totalBets: filteredBets.length,
             profit: filteredProfit,
@@ -489,7 +503,9 @@ export default function BetsPage() {
             pendingBets: filteredBets.filter(b => b.status === 'pending').length,
             totalStaked,
             potentialGain,
-            potentialPayout
+            potentialPayout,
+            lossAmount,
+            finalBalance
         };
     }, [filteredBets]);
 
@@ -502,6 +518,8 @@ export default function BetsPage() {
             totalStaked: 0,
             potentialGain: 0,
             potentialPayout: 0,
+            lossAmount: 0,
+            finalBalance: 0,
             count: 0,
         }));
 
@@ -526,14 +544,14 @@ export default function BetsPage() {
                 const stake = bet.stake ?? 0;
                 const odds = bet.odds ?? 0;
                 if (bet.status === 'won') bucket.potentialGain += (stake * odds) - stake;
-                else if (bet.status === 'lost' || bet.status === 'void') ;
+                else if (bet.status === 'lost' || bet.status === 'void') {}
                 else bucket.potentialGain += Math.max(stake * (odds - 1), 0);
             } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
                 const combinedPaidStake = bet.subBets
                     ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
                     : (bet.totalStake ?? 0);
                 if (bet.status === 'won') bucket.potentialGain += (bet.guaranteedProfit ?? 0);
-                else if (bet.status === 'lost' || bet.status === 'void') ;
+                else if (bet.status === 'lost' || bet.status === 'void') {}
                 else {
                     const maxOutcomeProfit = (bet.subBets ?? []).reduce((maxP, sb) => {
                         const stake = sb.stake ?? 0;
@@ -542,6 +560,17 @@ export default function BetsPage() {
                         return Math.max(maxP, profit);
                     }, 0);
                     bucket.potentialGain += Math.max(maxOutcomeProfit, 0);
+                }
+            }
+
+            if (bet.status === 'lost') {
+                if (bet.type === 'single') {
+                    bucket.lossAmount += (bet.stake ?? 0);
+                } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+                    const combinedPaidStake = bet.subBets
+                        ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                        : (bet.totalStake ?? 0);
+                    bucket.lossAmount += combinedPaidStake;
                 }
             }
 
@@ -578,6 +607,10 @@ export default function BetsPage() {
             }
 
             bucket.count += 1;
+        }
+
+        for (const d of byDay) {
+            d.finalBalance = d.potentialPayout - d.totalStaked;
         }
 
         const daysToShow = (dayFilter.length > 0 ? dayFilter : byDay.map(d => d.day))
@@ -981,6 +1014,13 @@ export default function BetsPage() {
                             icon={Calculator}
                         />
                         <SummaryCard
+                            title="Perdas"
+                            value={filteredStats.lossAmount}
+                            icon={TrendingDown}
+                            isCurrency
+                            valueClassName={filteredStats.lossAmount > 0 ? "text-destructive" : ""}
+                        />
+                        <SummaryCard
                             title="Valor Apostado"
                             value={filteredStats.totalStaked}
                             icon={Wallet}
@@ -999,6 +1039,13 @@ export default function BetsPage() {
                             icon={Wallet}
                             isCurrency
                             valueClassName={filteredStats.potentialPayout >= 0 ? "text-green-500" : "text-destructive"}
+                        />
+                        <SummaryCard
+                            title="Saldo Final (Despesas x Ganhos)"
+                            value={filteredStats.finalBalance}
+                            icon={Calculator}
+                            isCurrency
+                            valueClassName={filteredStats.finalBalance >= 0 ? "text-green-500" : "text-destructive"}
                         />
                     </div>
                 </div>
@@ -1031,6 +1078,14 @@ export default function BetsPage() {
                                     <div className="mt-2">
                                         <div className="text-xs text-muted-foreground">Retorno Potencial</div>
                                         <div className={`text-sm font-semibold ${d.potentialPayout >= 0 ? 'text-green-500' : 'text-destructive'}`}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(d.potentialPayout)}</div>
+                                    </div>
+                                    <div className="mt-2">
+                                        <div className="text-xs text-muted-foreground">Perdas</div>
+                                        <div className="text-destructive text-sm font-semibold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(d.lossAmount)}</div>
+                                    </div>
+                                    <div className="mt-2">
+                                        <div className="text-xs text-muted-foreground">Saldo Final</div>
+                                        <div className={`text-sm font-semibold ${d.finalBalance >= 0 ? 'text-green-500' : 'text-destructive'}`}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(d.finalBalance)}</div>
                                     </div>
                                 </CardContent>
                             </Card>

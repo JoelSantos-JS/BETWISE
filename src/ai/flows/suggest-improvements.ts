@@ -8,8 +8,8 @@
  * - SuggestImprovementsOutput - The return type for the suggestImprovements function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
 
 const SuggestImprovementsInputSchema = z.object({
   bettingDataSummary: z
@@ -33,27 +33,19 @@ export async function suggestImprovements(input: SuggestImprovementsInput): Prom
   return suggestImprovementsFlow(input);
 }
 
-const prompt = ai.definePrompt({
-  name: 'suggestImprovementsPrompt',
-  input: {schema: SuggestImprovementsInputSchema},
-  output: {schema: SuggestImprovementsOutputSchema},
-  prompt: `You are an AI assistant specializing in providing betting strategy improvements.
-
-  Based on the following summary of the user's betting data, provide suggestions for improving their betting strategy.  Consider recommending specific types of bets, optimal stake amounts, or alternative betting markets to increase their chances of winning and maximize their profits.
-
-  Betting Data Summary: {{{bettingDataSummary}}}
-
-  Suggestions:`,
-});
-
-const suggestImprovementsFlow = ai.defineFlow(
+export const suggestImprovementsFlow = ai.defineFlow(
   {
     name: 'suggestImprovementsFlow',
     inputSchema: SuggestImprovementsInputSchema,
     outputSchema: SuggestImprovementsOutputSchema,
   },
-  async input => {
-    const {output} = await prompt(input);
-    return output!;
+  async (input) => {
+    const prompt = `You are an AI assistant specializing in providing betting strategy improvements.\n\nBased on the following summary of the user's betting data, provide suggestions for improving their betting strategy. Consider recommending specific types of bets, optimal stake amounts, or alternative betting markets to increase their chances of winning and maximize their profits.\n\nBetting Data Summary: ${input.bettingDataSummary}\n\nSuggestions:`;
+    const { output } = await ai.generate({
+      prompt,
+      output: { schema: SuggestImprovementsOutputSchema },
+    });
+    if (!output) throw new Error('No output from model');
+    return output;
   }
 );

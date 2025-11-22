@@ -30,7 +30,7 @@ import { useBets } from '@/context/bet-provider';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { SPORTS } from '@/lib/data';
-import type { BetResult, Sport } from '@/lib/types';
+import type { Bet } from '@/lib/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -42,14 +42,11 @@ const formSchema = z.object({
   sport: z.string({
     required_error: 'Please select a sport.',
   }),
-  match: z.string().min(2, {
-    message: 'Match name must be at least 2 characters.',
+  event: z.string().min(2, {
+    message: 'Event must be at least 2 characters.',
   }),
-  market: z.string().min(2, {
-    message: 'Market must be at least 2 characters.',
-  }),
-  selection: z.string().min(1, {
-    message: 'Selection is required.',
+  betType: z.string().min(2, {
+    message: 'Bet type must be at least 2 characters.',
   }),
   stake: z.coerce.number().min(0.01, {
     message: 'Stake must be a positive number.',
@@ -57,7 +54,7 @@ const formSchema = z.object({
   odds: z.coerce.number().min(1.01, {
     message: 'Odds must be greater than 1.00.',
   }),
-  result: z.enum(['won', 'lost', 'pending']),
+  status: z.enum(['pending', 'won', 'lost']),
 });
 
 export function AddBetForm() {
@@ -102,23 +99,27 @@ export function AddBetForm() {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      match: '',
-      market: '',
-      selection: '',
+      event: '',
+      betType: '',
       stake: 10,
       odds: 2.0,
-      result: 'pending',
+      status: 'pending',
       date: new Date(),
     },
   });
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    addBet({
-      ...values,
-      date: values.date.toISOString(),
-      sport: values.sport as Sport,
-      result: values.result as BetResult,
-    });
+    const newBet: Omit<Bet, 'id'> = {
+      type: 'single',
+      sport: values.sport,
+      event: values.event,
+      betType: values.betType,
+      stake: values.stake,
+      odds: values.odds,
+      status: values.status,
+      date: values.date,
+    };
+    addBet(newBet);
     toast({
         title: "Bet added!",
         description: "Your bet has been successfully logged.",
@@ -206,12 +207,12 @@ export function AddBetForm() {
         </div>
         <FormField
           control={form.control}
-          name="match"
+          name="event"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Match / Event</FormLabel>
+              <FormLabel>Evento</FormLabel>
               <FormControl>
-                <Input placeholder="e.g. Real Madrid vs Barcelona" {...field} />
+                <Input placeholder="Ex: Real Madrid vs Barcelona" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -220,30 +221,18 @@ export function AddBetForm() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <FormField
             control={form.control}
-            name="market"
+            name="betType"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Market</FormLabel>
+                <FormLabel>Tipo de Aposta</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g. Match Winner" {...field} />
+                  <Input placeholder="Ex: Match Winner / Over 2.5" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-          <FormField
-            control={form.control}
-            name="selection"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Selection</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g. Real Madrid" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+          
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <FormField
@@ -274,20 +263,20 @@ export function AddBetForm() {
           />
           <FormField
             control={form.control}
-            name="result"
+            name="status"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Result</FormLabel>
+                <FormLabel>Status</FormLabel>
                 <Select onValueChange={field.onChange} defaultValue={field.value}>
                   <FormControl>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select a result" />
+                      <SelectValue placeholder="Selecione o status" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="won">Won</SelectItem>
-                    <SelectItem value="lost">Lost</SelectItem>
+                    <SelectItem value="pending">Pendente</SelectItem>
+                    <SelectItem value="won">Ganha</SelectItem>
+                    <SelectItem value="lost">Perdida</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -297,7 +286,7 @@ export function AddBetForm() {
         </div>
 
         <Button type="submit" size="lg" className="w-full md:w-auto">
-            Add Bet
+            Adicionar Aposta
         </Button>
           </form>
         </Form>

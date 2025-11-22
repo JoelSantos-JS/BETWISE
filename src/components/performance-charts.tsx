@@ -15,13 +15,22 @@ import { format } from 'date-fns';
 
 export function PerformanceCharts({ bets }: { bets: Bet[] }) {
   const chartData = useMemo(() => {
-    const sortedBets = bets
-      .filter(b => b.result !== 'pending')
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const resolvedBets = bets.filter(b => b.status !== 'pending' && b.status !== 'void');
+    const sortedBets = resolvedBets.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     
     let cumulativeProfit = 0;
     const data = sortedBets.map(bet => {
-      const profit = bet.result === 'won' ? bet.stake * bet.odds - bet.stake : -bet.stake;
+      let profit = 0;
+      if (bet.type === 'single') {
+        const stake = bet.stake ?? 0;
+        const odds = bet.odds ?? 0;
+        profit = bet.status === 'won' ? stake * odds - stake : -stake;
+      } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+        const totalStake = bet.subBets
+          ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+          : (bet.totalStake ?? 0);
+        profit = bet.status === 'won' ? (bet.guaranteedProfit ?? 0) : -totalStake;
+      }
       cumulativeProfit += profit;
       return {
         date: new Date(bet.date),

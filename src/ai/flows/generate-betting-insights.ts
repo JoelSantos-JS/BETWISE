@@ -8,8 +8,8 @@
  * - GenerateBettingInsightsOutput - The return type for the generateBettingInsights function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
 
 const GenerateBettingInsightsInputSchema = z.object({
   bettingData: z.string().describe('The user betting data as a JSON string.'),
@@ -31,28 +31,19 @@ export async function generateBettingInsights(
   return generateBettingInsightsFlow(input);
 }
 
-const prompt = ai.definePrompt({
-  name: 'generateBettingInsightsPrompt',
-  input: {schema: GenerateBettingInsightsInputSchema},
-  output: {schema: GenerateBettingInsightsOutputSchema},
-  prompt: `You are an expert betting analyst. Analyze the following betting data and provide insights on the user's betting performance, such as identifying successful betting patterns, areas for improvement, and potential biases in their betting strategy. The betting data is provided as a JSON string:\n\n{{bettingData}}`,
-});
-
-const generateBettingInsightsFlow = ai.defineFlow(
+export const generateBettingInsightsFlow = ai.defineFlow(
   {
     name: 'generateBettingInsightsFlow',
     inputSchema: GenerateBettingInsightsInputSchema,
     outputSchema: GenerateBettingInsightsOutputSchema,
   },
-  async input => {
-    try {
-      const {output} = await prompt(input);
-      return output!;
-    } catch (error: any) {
-      console.error('Error in generateBettingInsightsFlow:', error);
-      throw new Error(
-        `Failed to generate betting insights: ${error.message || error}`
-      );
-    }
+  async (input) => {
+    const prompt = `You are an expert betting analyst. Analyze the following betting data and provide insights on the user's betting performance, such as identifying successful betting patterns, areas for improvement, and potential biases in their betting strategy. The betting data is provided as a JSON string:\n\n${input.bettingData}`;
+    const { output } = await ai.generate({
+      prompt,
+      output: { schema: GenerateBettingInsightsOutputSchema },
+    });
+    if (!output) throw new Error('No output from model');
+    return output;
   }
 );
