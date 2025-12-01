@@ -183,6 +183,56 @@ export default function BetsPage() {
         }
     }, [bets, bookmakers]);
 
+    const monthlyProfitSummary = useMemo(() => {
+        const calcProfit = (bet: Bet) => {
+            if (bet.status === 'pending' || bet.status === 'void') return 0;
+            if (bet.realizedProfit !== null && bet.realizedProfit !== undefined) return bet.realizedProfit;
+            if (bet.type === 'single') {
+                const stake = bet.stake ?? 0;
+                const odds = bet.odds ?? 0;
+                if (bet.status === 'won') return (stake * odds) - stake;
+                if (bet.status === 'lost') return -stake;
+                return 0;
+            } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+                if (bet.status === 'won') return (bet.guaranteedProfit ?? 0);
+                if (bet.status === 'lost') {
+                    const combinedPaidStake = bet.subBets
+                        ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                        : (bet.totalStake ?? 0);
+                    return -combinedPaidStake;
+                }
+                return 0;
+            }
+            return 0;
+        };
+
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+        const prevDate = new Date(currentYear, currentMonth - 1, 1);
+        const prevYear = prevDate.getFullYear();
+        const prevMonth = prevDate.getMonth();
+
+        const currentMonthProfit = bets.reduce((sum, bet) => {
+            const d = new Date(bet.date);
+            return d.getFullYear() === currentYear && d.getMonth() === currentMonth
+                ? sum + calcProfit(bet)
+                : sum;
+        }, 0);
+
+        const prevMonthProfit = bets.reduce((sum, bet) => {
+            const d = new Date(bet.date);
+            return d.getFullYear() === prevYear && d.getMonth() === prevMonth
+                ? sum + calcProfit(bet)
+                : sum;
+        }, 0);
+
+        const monthNames = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+        const prevMonthLabel = `${monthNames[prevMonth]} ${prevYear}`;
+
+        return { currentMonthProfit, prevMonthProfit, prevMonthLabel };
+    }, [bets]);
+
     // Valores exibidos com possíveis overrides
     const displayInitialTotal = totalsOverride?.initial ?? summaryStats.totalInitialBankroll;
     // Se houver override explícito para 'current', obedecer; caso contrário, somar lucro ao inicial exibido
@@ -617,6 +667,143 @@ export default function BetsPage() {
             .filter(d => byDay[d].count > 0);
         return byDay.filter(d => daysToShow.includes(d.day));
     }, [filteredBets, dayFilter]);
+
+    const monthlyStats = useMemo(() => {
+        const byMonth: Record<string, {
+            key: string;
+            year: number;
+            month: number;
+            label: string;
+            totalStaked: number;
+            potentialGain: number;
+            potentialPayout: number;
+            lossAmount: number;
+            finalBalance: number;
+            count: number;
+            isCurrent: boolean;
+        }> = {};
+
+        const now = new Date();
+        const currentKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
+        const makeLabel = (y: number, m: number) => {
+            const names = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+            return `${names[m]} ${y}`;
+        };
+
+        for (const bet of filteredBets) {
+            const d = new Date(bet.date);
+            const y = d.getFullYear();
+            const m = d.getMonth();
+            const key = `${y}-${String(m+1).padStart(2,'0')}`;
+
+            if (!byMonth[key]) {
+                byMonth[key] = {
+                    key,
+                    year: y,
+                    month: m,
+                    label: makeLabel(y, m),
+                    totalStaked: 0,
+                    potentialGain: 0,
+                    potentialPayout: 0,
+                    lossAmount: 0,
+                    finalBalance: 0,
+                    count: 0,
+                    isCurrent: key === currentKey,
+                };
+            }
+
+            const bucket = byMonth[key];
+
+            // staked
+            if (bet.type === 'single') {
+                bucket.totalStaked += (bet.stake ?? 0);
+            } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+                const combinedPaidStake = bet.subBets
+                    ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                    : (bet.totalStake ?? 0);
+                bucket.totalStaked += combinedPaidStake;
+            }
+
+            // potential gain
+            if (bet.realizedProfit != null) {
+                bucket.potentialGain += bet.realizedProfit;
+            } else if (bet.type === 'single') {
+                const stake = bet.stake ?? 0;
+                const odds = bet.odds ?? 0;
+                if (bet.status === 'won') bucket.potentialGain += (stake * odds) - stake;
+                else if (bet.status === 'lost' || bet.status === 'void') {}
+                else bucket.potentialGain += Math.max(stake * (odds - 1), 0);
+            } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+                const combinedPaidStake = bet.subBets
+                    ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                    : (bet.totalStake ?? 0);
+                if (bet.status === 'won') bucket.potentialGain += (bet.guaranteedProfit ?? 0);
+                else if (bet.status === 'lost' || bet.status === 'void') {}
+                else {
+                    const maxOutcomeProfit = (bet.subBets ?? []).reduce((maxP, sb) => {
+                        const stake = sb.stake ?? 0;
+                        const odds = sb.odds ?? 0;
+                        const profit = sb.isFreebet ? (stake * (odds - 1)) - combinedPaidStake : (stake * odds) - combinedPaidStake;
+                        return Math.max(maxP, profit);
+                    }, 0);
+                    bucket.potentialGain += Math.max(maxOutcomeProfit, 0);
+                }
+            }
+
+            if (bet.status === 'lost') {
+                if (bet.type === 'single') {
+                    bucket.lossAmount += (bet.stake ?? 0);
+                } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+                    const combinedPaidStake = bet.subBets
+                        ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                        : (bet.totalStake ?? 0);
+                    bucket.lossAmount += combinedPaidStake;
+                }
+            }
+
+            // potential payout
+            if (bet.realizedProfit != null) {
+                if (bet.type === 'single') {
+                    const stake = bet.stake ?? 0;
+                    bucket.potentialPayout += bet.realizedProfit + stake;
+                } else {
+                    const combinedPaidStake = bet.subBets
+                        ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                        : (bet.totalStake ?? 0);
+                    bucket.potentialPayout += bet.realizedProfit + combinedPaidStake;
+                }
+            } else if (bet.type === 'single') {
+                const stake = bet.stake ?? 0;
+                const odds = bet.odds ?? 0;
+                if (bet.status === 'won' || bet.status === 'pending' || bet.status === 'cashed_out') bucket.potentialPayout += stake * odds;
+            } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+                if (bet.status === 'won') {
+                    const combinedPaidStake = bet.subBets
+                        ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                        : (bet.totalStake ?? 0);
+                    bucket.potentialPayout += (bet.guaranteedProfit ?? 0) + combinedPaidStake;
+                } else if (bet.status === 'pending' || bet.status === 'cashed_out') {
+                    const maxOutcomeReturn = (bet.subBets ?? []).reduce((maxR, sb) => {
+                        const stake = sb.stake ?? 0;
+                        const odds = sb.odds ?? 0;
+                        const credited = sb.isFreebet ? (stake * (odds - 1)) : (stake * odds);
+                        return Math.max(maxR, credited);
+                    }, 0);
+                    bucket.potentialPayout += Math.max(maxOutcomeReturn, 0);
+                }
+            }
+
+            bucket.count += 1;
+        }
+
+        const items = Object.values(byMonth).map(b => ({
+            ...b,
+            finalBalance: b.potentialPayout - b.totalStaked,
+        }));
+
+        return items.sort((a, b) => (b.year - a.year) || (b.month - a.month));
+    }, [filteredBets]);
     
     // CRUD Handlers for Bets
     const handleOpenBetForm = (bet: Bet | null = null) => {
@@ -925,7 +1112,8 @@ export default function BetsPage() {
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <SummaryCard title="Banca Inicial Total" value={displayInitialTotal} icon={Landmark} isCurrency />
                     <SummaryCard title="Banca Atual Total" value={displayCurrentTotal} icon={Wallet} isCurrency />
-                    <SummaryCard title="Lucro/Prejuízo Total" value={summaryStats.allTimeProfit} icon={summaryStats.allTimeProfit >= 0 ? TrendingUp : TrendingDown} isCurrency valueClassName={summaryStats.allTimeProfit >= 0 ? "text-green-500" : "text-destructive"} />
+                    <SummaryCard title="Lucro do Mês Atual" value={monthlyProfitSummary.currentMonthProfit} icon={monthlyProfitSummary.currentMonthProfit >= 0 ? TrendingUp : TrendingDown} isCurrency valueClassName={monthlyProfitSummary.currentMonthProfit >= 0 ? "text-green-500" : "text-destructive"} />
+                    <SummaryCard title={`Lucro/Prejuízo Mês Anterior (${monthlyProfitSummary.prevMonthLabel})`} value={monthlyProfitSummary.prevMonthProfit} icon={monthlyProfitSummary.prevMonthProfit >= 0 ? TrendingUp : TrendingDown} isCurrency valueClassName={monthlyProfitSummary.prevMonthProfit >= 0 ? "text-green-500" : "text-destructive"} />
                     <SummaryCard title="Total de Apostas" value={bets.length} icon={Landmark} />
                 </div>
             </div>
@@ -1087,6 +1275,45 @@ export default function BetsPage() {
                                         <div className="text-xs text-muted-foreground">Saldo Final</div>
                                         <div className={`text-sm font-semibold ${d.finalBalance >= 0 ? 'text-green-500' : 'text-destructive'}`}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(d.finalBalance)}</div>
                                     </div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Monthly Breakdown Cards */}
+            {monthlyStats.length > 0 && (
+                <div className="mb-6">
+                    <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <Calendar className="h-5 w-5" />
+                        Resumo por Mês
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {monthlyStats.map(m => (
+                            <Card key={m.key}>
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-base flex items-center justify-between">
+                                        <span>{m.label}</span>
+                                        {m.isCurrent && <span className="text-xs text-muted-foreground">em andamento</span>}
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="pt-0">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <div className="text-xs text-muted-foreground">Apostado</div>
+                                            <div className="text-sm font-semibold">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(m.totalStaked)}</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-xs text-muted-foreground">Perdas</div>
+                                            <div className="text-sm font-semibold text-destructive">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(m.lossAmount)}</div>
+                                        </div>
+                                    </div>
+                                    <div className="mt-2">
+                                        <div className="text-xs text-muted-foreground">Saldo Final</div>
+                                        <div className={`text-sm font-semibold ${m.finalBalance >= 0 ? 'text-green-500' : 'text-destructive'}`}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(m.finalBalance)}</div>
+                                    </div>
+                                    <div className="mt-2 text-xs text-muted-foreground">Apostas no mês: {m.count}</div>
                                 </CardContent>
                             </Card>
                         ))}
