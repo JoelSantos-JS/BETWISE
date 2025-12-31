@@ -71,6 +71,7 @@ export default function BetsPage() {
     const [dayFilter, setDayFilter] = useState<number[]>([]); // 0=Dom, 6=Sáb
     const [customDateStart, setCustomDateStart] = useState<string>("");
     const [customDateEnd, setCustomDateEnd] = useState<string>("");
+    const [selectedMonth, setSelectedMonth] = useState<string>("");
     const [profitFilter, setProfitFilter] = useState<string>("all");
     const [minProfit, setMinProfit] = useState<string>("");
     const [maxProfit, setMaxProfit] = useState<string>("");
@@ -326,6 +327,15 @@ export default function BetsPage() {
                 case 'month':
                     startDate = startOfMonth(now);
                     endDate = endOfMonth(now);
+                    break;
+                case 'specific_month':
+                    if (selectedMonth) {
+                        const base = new Date(`${selectedMonth}-01T00:00:00`);
+                        startDate = startOfMonth(base);
+                        endDate = endOfMonth(base);
+                    } else {
+                        return filtered;
+                    }
                     break;
                 case 'custom':
                     if (customDateStart && customDateEnd) {
@@ -1343,10 +1353,22 @@ export default function BetsPage() {
                                 <SelectItem value="today">Hoje</SelectItem>
                                 <SelectItem value="week">Esta semana</SelectItem>
                                 <SelectItem value="month">Este mês</SelectItem>
+                                <SelectItem value="specific_month">Mês específico</SelectItem>
                                 <SelectItem value="custom">Período personalizado</SelectItem>
                             </SelectContent>
                         </Select>
                         
+                        {dateFilter === 'specific_month' && (
+                            <div className="mt-2">
+                                <Label htmlFor="month-select" className="text-xs">Selecione o mês</Label>
+                                <Input
+                                    id="month-select"
+                                    type="month"
+                                    value={selectedMonth}
+                                    onChange={(e) => setSelectedMonth(e.target.value)}
+                                />
+                            </div>
+                        )}
                         {dateFilter === 'custom' && (
                             <div className="grid grid-cols-2 gap-2 mt-2">
                                 <div>
