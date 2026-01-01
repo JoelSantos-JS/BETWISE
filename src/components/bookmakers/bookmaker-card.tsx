@@ -5,32 +5,32 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { MoreVertical, Edit, Trash2, TrendingUp, TrendingDown, Wallet, Landmark } from "lucide-react";
-import type { Bet, Bookmaker } from "@/lib/types";
+import type { Bet, Bookmaker, FreeSpin } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface BookmakerCardProps {
     bookmaker: Bookmaker;
     bets: Bet[];
+    freeSpins: FreeSpin[];
     onEdit: () => void;
     onDelete: () => void;
-    // This component is now also used to get calculated stats for export, so we make stats available
     stats?: { profit: number; currentBalance: number };
 }
 
-export function BookmakerCard({ bookmaker, bets, onEdit, onDelete }: BookmakerCardProps) {
+export function BookmakerCard({ bookmaker, bets, freeSpins, onEdit, onDelete }: BookmakerCardProps) {
     const stats = useMemo(() => {
         const relevantBets = bets.filter(bet => {
             if (bet.type === 'single') return bet.bookmaker === bookmaker.name;
-            if (bet.type === 'surebet') return bet.subBets?.some(sb => sb.bookmaker === bookmaker.name);
+            if (bet.type === 'surebet' || bet.type === 'pa_surebet') return bet.subBets?.some(sb => sb.bookmaker === bookmaker.name);
             return false;
         }).filter(bet => ['won', 'lost'].includes(bet.status));
 
-        const profit = relevantBets.reduce((acc, bet) => {
+        const profitFromBets = relevantBets.reduce((acc, bet) => {
             let subProfit = 0;
             if (bet.type === 'single') {
                  if (bet.status === 'won') subProfit = (bet.stake! * bet.odds! - bet.stake!);
                  if (bet.status === 'lost') subProfit = -bet.stake!;
-            } else if (bet.type === 'surebet') {
+            } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
                 const subBet = bet.subBets?.find(sb => sb.bookmaker === bookmaker.name);
                 if (!subBet) return acc;
                 
@@ -51,10 +51,16 @@ export function BookmakerCard({ bookmaker, bets, onEdit, onDelete }: BookmakerCa
             return acc + subProfit;
         }, 0);
 
+        const profitFromFreeSpins = freeSpins
+            .filter(fs => fs.bookmaker === bookmaker.name)
+            .reduce((sum, fs) => sum + (fs.wonAmount ?? 0), 0);
+
+        const profit = profitFromBets + profitFromFreeSpins;
+
         const currentBalance = bookmaker.initialBankroll + profit;
 
         return { profit, currentBalance };
-    }, [bookmaker, bets]);
+    }, [bookmaker, bets, freeSpins]);
 
     return (
         <Card className="flex flex-col h-full">

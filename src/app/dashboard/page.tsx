@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import type { Bet, Bookmaker as BookmakerType } from '@/lib/types';
+import type { Bet, Bookmaker as BookmakerType, FreeSpin } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, BarChart, AlertTriangle, Save, TrendingUp, TrendingDown, Calculator, Wallet, Landmark, Building, FileDown, Loader2, Calendar, Filter, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -33,7 +33,7 @@ import { AdvancedSurebetCalculator } from '@/components/bets/advanced-surebet-ca
 import { TradingCalculator } from '@/components/bets/trading-calculator';
 import { startOfDay, startOfWeek, startOfMonth, endOfDay, endOfWeek, endOfMonth, isWithinInterval, format } from 'date-fns';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, getDoc, doc, setDoc, deleteDoc, addDoc, Timestamp, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, setDoc, deleteDoc, addDoc, Timestamp, writeBatch, deleteField } from 'firebase/firestore';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -49,6 +49,7 @@ export default function BetsPage() {
     // States
     const [bets, setBets] = useState<Bet[]>([]);
     const [bookmakers, setBookmakers] = useState<BookmakerType[]>([]);
+    const [freeSpins, setFreeSpins] = useState<FreeSpin[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isExporting, setIsExporting] = useState(false);
     
@@ -84,10 +85,12 @@ export default function BetsPage() {
         try {
             const betsCollectionRef = collection(db, 'users', userId, 'bets');
             const bookmakersCollectionRef = collection(db, 'users', userId, 'bookmakers');
+            const freeSpinsCollectionRef = collection(db, 'users', userId, 'freeSpins');
 
-            const [betsSnapshot, bookmakersSnapshot] = await Promise.all([
+            const [betsSnapshot, bookmakersSnapshot, freeSpinsSnapshot] = await Promise.all([
                 getDocs(betsCollectionRef),
-                getDocs(bookmakersCollectionRef)
+                getDocs(bookmakersCollectionRef),
+                getDocs(freeSpinsCollectionRef),
             ]);
 
             const betsData = betsSnapshot.docs.map(doc => {
@@ -102,6 +105,16 @@ export default function BetsPage() {
             
             const bookmakersData = bookmakersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as BookmakerType);
             setBookmakers(bookmakersData);
+
+            const freeSpinsData = freeSpinsSnapshot.docs.map(doc => {
+                const data = doc.data() as any;
+                return {
+                    ...data,
+                    id: doc.id,
+                    date: data.date instanceof Timestamp ? data.date.toDate() : new Date(data.date),
+                } as FreeSpin;
+            });
+            setFreeSpins(freeSpinsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
 
             // Carregar overrides de totais (configuração do dashboard)
             try {
@@ -145,7 +158,7 @@ export default function BetsPage() {
     const summaryStats = useMemo(() => {
         const totalInitialBankroll = bookmakers.reduce((acc, b) => acc + b.initialBankroll, 0);
 
-        const allTimeProfit = bets.reduce((acc, bet) => {
+        const betsProfit = bets.reduce((acc, bet) => {
             // Ignorar pendentes e anuladas; considerar cashout via realizedProfit
             if (bet.status === 'pending' || bet.status === 'void') return acc;
 
@@ -173,6 +186,9 @@ export default function BetsPage() {
             return acc;
         }, 0);
 
+        const freeSpinsProfit = freeSpins.reduce((acc, fs) => acc + (fs.wonAmount ?? 0), 0);
+        const allTimeProfit = betsProfit + freeSpinsProfit;
+
         const currentBankroll = totalInitialBankroll + allTimeProfit;
         
         return {
@@ -182,7 +198,7 @@ export default function BetsPage() {
             totalBets: bets.length,
             winRate: bets.length > 0 ? (bets.filter(b => b.status === 'won').length / bets.filter(b => ['won', 'lost'].includes(b.status)).length) * 100 : 0
         }
-    }, [bets, bookmakers]);
+    }, [bets, bookmakers, freeSpins]);
 
     const monthlyProfitSummary = useMemo(() => {
         const calcProfit = (bet: Bet) => {
@@ -228,11 +244,25 @@ export default function BetsPage() {
                 : sum;
         }, 0);
 
+        const fsCurrentMonthProfit = freeSpins.reduce((sum, fs) => {
+            const d = new Date(fs.date);
+            return d.getFullYear() === currentYear && d.getMonth() === currentMonth
+                ? sum + (fs.wonAmount ?? 0)
+                : sum;
+        }, 0);
+
+        const fsPrevMonthProfit = freeSpins.reduce((sum, fs) => {
+            const d = new Date(fs.date);
+            return d.getFullYear() === prevYear && d.getMonth() === prevMonth
+                ? sum + (fs.wonAmount ?? 0)
+                : sum;
+        }, 0);
+
         const monthNames = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
         const prevMonthLabel = `${monthNames[prevMonth]} ${prevYear}`;
 
-        return { currentMonthProfit, prevMonthProfit, prevMonthLabel };
-    }, [bets]);
+        return { currentMonthProfit: currentMonthProfit + fsCurrentMonthProfit, prevMonthProfit: prevMonthProfit + fsPrevMonthProfit, prevMonthLabel };
+    }, [bets, freeSpins]);
 
     // Valores exibidos com possíveis overrides
     const displayInitialTotal = totalsOverride?.initial ?? summaryStats.totalInitialBankroll;
@@ -278,16 +308,22 @@ export default function BetsPage() {
 
     const handleSaveTotalsOverride = async () => {
         if (!user) { toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado.' }); return; }
-        const payload = {
-            totalsOverride: {
-                initial: parseNumber(overrideInitial),
-                current: parseNumber(overrideCurrent),
-            }
-        };
+        const initialNum = parseNumber(overrideInitial);
+        const currentNum = parseNumber(overrideCurrent);
+        const updateData: Record<string, any> = {};
+        updateData['totalsOverride.initial'] = (initialNum !== undefined) ? initialNum : deleteField();
+        updateData['totalsOverride.current'] = (currentNum !== undefined) ? currentNum : deleteField();
         try {
             const settingsDocRef = doc(db, 'users', user.uid, 'settings', 'dashboard');
-            await setDoc(settingsDocRef, payload, { merge: true });
-            setTotalsOverride(payload.totalsOverride);
+            await setDoc(settingsDocRef, updateData, { merge: true });
+            if (initialNum === undefined && currentNum === undefined) {
+                setTotalsOverride(null);
+            } else {
+                setTotalsOverride({
+                    initial: initialNum,
+                    current: currentNum,
+                });
+            }
             toast({ title: 'Totais atualizados', description: 'Os valores foram ajustados com sucesso.' });
             setIsTotalsDialogOpen(false);
         } catch (error) {
@@ -1145,6 +1181,7 @@ export default function BetsPage() {
                                 key={bk.id} 
                                 bookmaker={bk}
                                 bets={bets}
+                                freeSpins={freeSpins}
                                 onEdit={() => handleOpenBookmakerForm(bk)}
                                 onDelete={() => setBookmakerToDelete(bk)}
                             />

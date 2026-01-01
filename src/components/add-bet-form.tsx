@@ -48,6 +48,9 @@ const formSchema = z.object({
   betType: z.string().min(2, {
     message: 'Bet type must be at least 2 characters.',
   }),
+  bookmaker: z.string().min(1, {
+    message: 'Selecione a casa de apostas.',
+  }),
   stake: z.coerce.number().min(0.01, {
     message: 'Stake must be a positive number.',
   }),
@@ -66,7 +69,7 @@ const freeSpinsSchema = z.object({
 
 export function AddBetForm() {
   const router = useRouter();
-  const { addBet, addFreeSpin } = useBets();
+  const { addBet, addFreeSpin, bookmakers } = useBets();
   const { toast } = useToast();
 
   // Form de Giros Grátis
@@ -85,6 +88,7 @@ export function AddBetForm() {
     defaultValues: {
       event: '',
       betType: '',
+      bookmaker: '',
       stake: 10,
       odds: 2.0,
       status: 'pending',
@@ -98,6 +102,7 @@ export function AddBetForm() {
       sport: values.sport,
       event: values.event,
       betType: values.betType,
+      bookmaker: values.bookmaker,
       stake: values.stake,
       odds: values.odds,
       status: values.status,
@@ -159,6 +164,36 @@ export function AddBetForm() {
                     ))}
                   </SelectContent>
                 </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="bookmaker"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Casa de Apostas</FormLabel>
+                {bookmakers.length > 0 ? (
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger className="min-h-11">
+                        <SelectValue placeholder="Selecione a casa" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {bookmakers.map((bk) => (
+                        <SelectItem key={bk.id} value={bk.name}>
+                          {bk.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <FormControl>
+                    <Input className="h-11" placeholder="Ex: Betano" {...field} />
+                  </FormControl>
+                )}
                 <FormMessage />
               </FormItem>
             )}
@@ -302,9 +337,26 @@ export function AddBetForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Casa</FormLabel>
-                    <FormControl>
-                      <Input className="h-11" placeholder="Ex: Stake Casino" {...field} />
-                    </FormControl>
+                    {bookmakers.length > 0 ? (
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="min-h-11">
+                            <SelectValue placeholder="Selecione a casa" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {bookmakers.map((bk) => (
+                            <SelectItem key={bk.id} value={bk.name}>
+                              {bk.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <FormControl>
+                        <Input className="h-11" placeholder="Ex: Stake Casino" {...field} />
+                      </FormControl>
+                    )}
                     <FormMessage />
                   </FormItem>
                 )}
