@@ -15,6 +15,14 @@ export interface Bookmaker {
 
 export type OutcomeScenario = 'standard' | 'double_green' | 'pa_hedge';
 
+export interface FreeSpin {
+  id: string;
+  bookmaker: string;
+  spinsCount: number;
+  wonAmount: number;
+  date: Date;
+}
+
 export interface Bet {
   id: string;
   type: 'single' | 'surebet' | 'pa_surebet';

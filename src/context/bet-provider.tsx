@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import type { Bet, Bookmaker } from '@/lib/types';
+import type { Bet, Bookmaker, FreeSpin } from '@/lib/types';
 import { useAuth } from './auth-context';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc, addDoc, Timestamp } from 'firebase/firestore';
@@ -9,6 +9,7 @@ import { collection, getDocs, doc, setDoc, deleteDoc, addDoc, Timestamp } from '
 interface BetContextType {
   bets: Bet[];
   bookmakers: Bookmaker[];
+  freeSpins: FreeSpin[];
   isLoading: boolean;
   addBet: (bet: Omit<Bet, 'id'>) => Promise<void>;
   updateBet: (id: string, bet: Partial<Bet>) => Promise<void>;
@@ -16,6 +17,9 @@ interface BetContextType {
   addBookmaker: (bookmaker: Omit<Bookmaker, 'id'>) => Promise<void>;
   updateBookmaker: (id: string, bookmaker: Partial<Bookmaker>) => Promise<void>;
   deleteBookmaker: (id: string) => Promise<void>;
+  addFreeSpin: (freeSpin: Omit<FreeSpin, 'id'>) => Promise<void>;
+  updateFreeSpin: (id: string, freeSpin: Partial<FreeSpin>) => Promise<void>;
+  deleteFreeSpin: (id: string) => Promise<void>;
   refreshData: () => Promise<void>;
 }
 
@@ -29,6 +33,7 @@ export function BetProvider({ children }: BetProviderProps) {
   const { user } = useAuth();
   const [bets, setBets] = useState<Bet[]>([]);
   const [bookmakers, setBookmakers] = useState<Bookmaker[]>([]);
+  const [freeSpins, setFreeSpins] = useState<FreeSpin[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchUserData = async (userId: string) => {
@@ -36,10 +41,12 @@ export function BetProvider({ children }: BetProviderProps) {
     try {
       const betsCollectionRef = collection(db, 'users', userId, 'bets');
       const bookmakersCollectionRef = collection(db, 'users', userId, 'bookmakers');
+      const freeSpinsCollectionRef = collection(db, 'users', userId, 'freeSpins');
 
-      const [betsSnapshot, bookmakersSnapshot] = await Promise.all([
+      const [betsSnapshot, bookmakersSnapshot, freeSpinsSnapshot] = await Promise.all([
         getDocs(betsCollectionRef),
-        getDocs(bookmakersCollectionRef)
+        getDocs(bookmakersCollectionRef),
+        getDocs(freeSpinsCollectionRef),
       ]);
 
       const betsData = betsSnapshot.docs.map(doc => {
@@ -56,8 +63,18 @@ export function BetProvider({ children }: BetProviderProps) {
         id: doc.id,
       })) as Bookmaker[];
 
+      const freeSpinsData = freeSpinsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          ...data,
+          id: doc.id,
+          date: data.date instanceof Timestamp ? data.date.toDate() : new Date(data.date),
+        } as FreeSpin;
+      });
+
       setBets(betsData);
       setBookmakers(bookmakersData);
+      setFreeSpins(freeSpinsData);
     } catch (error) {
       console.error('Error fetching user data:', error);
     } finally {
@@ -173,6 +190,59 @@ export function BetProvider({ children }: BetProviderProps) {
     }
   };
 
+  const addFreeSpin = async (freeSpinData: Omit<FreeSpin, 'id'>) => {
+    if (!user?.uid) return;
+
+    try {
+      const freeSpinsCollectionRef = collection(db, 'users', user.uid, 'freeSpins');
+      const docRef = await addDoc(freeSpinsCollectionRef, {
+        ...freeSpinData,
+        date: Timestamp.fromDate(freeSpinData.date),
+      });
+
+      const newFreeSpin = { ...freeSpinData, id: docRef.id };
+      setFreeSpins(prev => [...prev, newFreeSpin]);
+    } catch (error) {
+      console.error('Error adding free spin:', error);
+      throw error;
+    }
+  };
+
+  const updateFreeSpin = async (id: string, freeSpinData: Partial<FreeSpin>) => {
+    if (!user?.uid) return;
+
+    try {
+      const freeSpinDocRef = doc(db, 'users', user.uid, 'freeSpins', id);
+      const updateData = {
+        ...freeSpinData,
+        ...(freeSpinData.date && { date: Timestamp.fromDate(freeSpinData.date) }),
+      };
+
+      await setDoc(freeSpinDocRef, updateData, { merge: true });
+
+      setFreeSpins(prev => prev.map(fs =>
+        fs.id === id ? { ...fs, ...freeSpinData } : fs
+      ));
+    } catch (error) {
+      console.error('Error updating free spin:', error);
+      throw error;
+    }
+  };
+
+  const deleteFreeSpin = async (id: string) => {
+    if (!user?.uid) return;
+
+    try {
+      const freeSpinDocRef = doc(db, 'users', user.uid, 'freeSpins', id);
+      await deleteDoc(freeSpinDocRef);
+
+      setFreeSpins(prev => prev.filter(fs => fs.id !== id));
+    } catch (error) {
+      console.error('Error deleting free spin:', error);
+      throw error;
+    }
+  };
+
   const refreshData = async () => {
     if (user?.uid) {
       await fetchUserData(user.uid);
@@ -182,6 +252,7 @@ export function BetProvider({ children }: BetProviderProps) {
   const value: BetContextType = {
     bets,
     bookmakers,
+    freeSpins,
     isLoading,
     addBet,
     updateBet,
@@ -189,6 +260,9 @@ export function BetProvider({ children }: BetProviderProps) {
     addBookmaker,
     updateBookmaker,
     deleteBookmaker,
+    addFreeSpin,
+    updateFreeSpin,
+    deleteFreeSpin,
     refreshData,
   };
 

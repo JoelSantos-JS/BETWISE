@@ -32,6 +32,7 @@ import { useToast } from '@/hooks/use-toast';
 import { SPORTS } from '@/lib/data';
 import type { Bet } from '@/lib/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { FreeSpin } from '@/lib/types';
  
 
 const formSchema = z.object({
@@ -56,13 +57,28 @@ const formSchema = z.object({
   status: z.enum(['pending', 'won', 'lost']),
 });
 
+const freeSpinsSchema = z.object({
+  date: z.date({ required_error: 'Informe a data' }),
+  bookmaker: z.string().min(1, { message: 'Informe o nome da casa' }),
+  spinsCount: z.coerce.number().int().min(1, { message: 'Quantidade deve ser >= 1' }),
+  wonAmount: z.coerce.number().min(0, { message: 'Valor deve ser >= 0' }),
+});
+
 export function AddBetForm() {
   const router = useRouter();
-  const { addBet } = useBets();
+  const { addBet, addFreeSpin } = useBets();
   const { toast } = useToast();
 
-  // Estado para a aba de Giros Grátis (simplificada)
-  
+  // Form de Giros Grátis
+  const freeSpinsForm = useForm<z.infer<typeof freeSpinsSchema>>({
+    resolver: zodResolver(freeSpinsSchema),
+    defaultValues: {
+      date: new Date(),
+      bookmaker: '',
+      spinsCount: 10,
+      wonAmount: 0,
+    },
+  });
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -96,10 +112,27 @@ export function AddBetForm() {
     router.push('/dashboard');
   }
 
+  function onSubmitFreeSpins(values: z.infer<typeof freeSpinsSchema>) {
+    const newFS: Omit<FreeSpin, 'id'> = {
+      date: values.date,
+      bookmaker: values.bookmaker,
+      spinsCount: values.spinsCount,
+      wonAmount: values.wonAmount,
+    };
+    addFreeSpin(newFS);
+    toast({
+      title: "Giros Grátis adicionados!",
+      description: "Registro de giros grátis salvo com sucesso.",
+      className: "bg-sidebar-accent border-sidebar-border",
+    });
+    router.push('/dashboard');
+  }
+
   return (
     <Tabs defaultValue="bet" className="space-y-6">
-      <TabsList className="w-full md:w-auto">
-        <TabsTrigger value="bet">Adicionar Aposta</TabsTrigger>
+      <TabsList className="flex w-full overflow-x-auto gap-2 sm:w-auto sm:overflow-visible">
+        <TabsTrigger className="flex-shrink-0" value="bet">Adicionar Aposta</TabsTrigger>
+        <TabsTrigger className="flex-shrink-0" value="freeSpins">Giros Grátis</TabsTrigger>
       </TabsList>
 
       <TabsContent value="bet">
@@ -259,6 +292,101 @@ export function AddBetForm() {
         </Form>
       </TabsContent>
 
+      <TabsContent value="freeSpins">
+        <Form {...freeSpinsForm}>
+          <form onSubmit={freeSpinsForm.handleSubmit(onSubmitFreeSpins)} className="space-y-6 sm:space-y-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              <FormField
+                control={freeSpinsForm.control}
+                name="bookmaker"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Casa</FormLabel>
+                    <FormControl>
+                      <Input className="h-11" placeholder="Ex: Stake Casino" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={freeSpinsForm.control}
+                name="date"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>Data</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={'outline'}
+                            className={cn(
+                              'pl-3 text-left font-normal min-h-11',
+                              !field.value && 'text-muted-foreground'
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, 'PPP')
+                            ) : (
+                              <span>Escolha a data</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          disabled={(date) =>
+                            date > new Date() || date < new Date('1900-01-01')
+                          }
+                          initialFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              <FormField
+                control={freeSpinsForm.control}
+                name="spinsCount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Quantidade de Giros</FormLabel>
+                    <FormControl>
+                      <Input className="h-11" type="number" inputMode="numeric" min={1} step="1" placeholder="10" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={freeSpinsForm.control}
+                name="wonAmount"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Valor Ganho ($)</FormLabel>
+                    <FormControl>
+                      <Input className="h-11" type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <Button type="submit" size="lg" className="w-full md:w-auto">
+              Salvar Giros Grátis
+            </Button>
+          </form>
+        </Form>
+      </TabsContent>
       
     </Tabs>
   );

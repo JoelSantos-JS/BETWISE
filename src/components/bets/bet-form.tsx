@@ -3,7 +3,7 @@
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, ShieldCheck, Trash2, PlusCircle, Star, Target } from "lucide-react";
+import { Loader2, ShieldCheck, Trash2, PlusCircle, Star, Target, Gift } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import React, { useEffect, useState } from 'react';
@@ -22,6 +22,8 @@ import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Checkbox } from "../ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useBets } from "@/context/bet-provider";
+import { useToast } from "@/hooks/use-toast";
  
 
 
@@ -127,6 +129,9 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
   const [freeSpinsBookmaker, setFreeSpinsBookmaker] = useState<string>('');
   const [freeSpinsCount, setFreeSpinsCount] = useState<number>(0);
   const [freeSpinsEarned, setFreeSpinsEarned] = useState<number>(0);
+  const [activeTab, setActiveTab] = useState<string>(betToEdit ? (betToEdit.type || 'single') : 'single');
+  const { addFreeSpin } = useBets();
+  const { toast } = useToast();
 
   const form = useForm<z.infer<typeof betSchema>>({
     resolver: zodResolver(betSchema),
@@ -180,6 +185,10 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
   const watchedStatus = watch("status");
   const watchedSubBets = watch("subBets");
   const watchedOutcomeScenario = watch("outcomeScenario");
+  
+  useEffect(() => {
+    setActiveTab(watchedType);
+  }, [watchedType]);
   
   const surebetCalculations = React.useMemo(() => {
     if (watchedType !== 'surebet' && watchedType !== 'pa_surebet') return { totalStake: 0, guaranteedProfit: 0, profitPercentage: 0 };
@@ -249,9 +258,33 @@ useEffect(() => {
   };
   
   const handleTabChange = (value: string) => {
+    setActiveTab(value);
     if (value === 'single' || value === 'surebet' || value === 'pa_surebet') {
       setValue('type', value as 'single' | 'surebet' | 'pa_surebet');
     }
+  };
+
+  const handleSaveFreeSpins = async () => {
+    if (!freeSpinsBookmaker || freeSpinsCount <= 0 || freeSpinsEarned < 0) {
+      toast({
+        title: "Dados inválidos",
+        description: "Preencha casa, quantidade (>=1) e valor (>=0).",
+        className: "bg-sidebar-accent border-sidebar-border",
+      });
+      return;
+    }
+    await addFreeSpin({
+      bookmaker: freeSpinsBookmaker,
+      spinsCount: freeSpinsCount,
+      wonAmount: freeSpinsEarned,
+      date: new Date(),
+    });
+    toast({
+      title: "Giros Grátis salvos",
+      description: "Registro adicionado com sucesso.",
+      className: "bg-sidebar-accent border-sidebar-border",
+    });
+    onCancel();
   };
 
 
@@ -268,13 +301,15 @@ useEffect(() => {
             <ScrollArea className="flex-1 min-h-0">
                 <div className="space-y-4 px-6 py-2">
                     
-                    <Tabs defaultValue={watchedType} onValueChange={handleTabChange} className="w-full">
-                        <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3">
-                            <TabsTrigger value="single">Aposta Simples</TabsTrigger>
-                            <TabsTrigger value="surebet" className="flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-teal-500"/> Surebet</TabsTrigger>
-                             <TabsTrigger value="pa_surebet" className="flex items-center gap-2"><Target className="w-4 h-4 text-orange-500"/> P.A. Surebet</TabsTrigger>
+                    <Tabs defaultValue={activeTab} onValueChange={handleTabChange} className="w-full">
+                        <TabsList className="flex w-full overflow-x-auto gap-2 sm:grid sm:grid-cols-4 sm:overflow-visible">
+                            <TabsTrigger className="flex-shrink-0" value="single">Aposta Simples</TabsTrigger>
+                            <TabsTrigger className="flex-shrink-0 flex items-center gap-2" value="surebet"><ShieldCheck className="w-4 h-4 text-teal-500"/> Surebet</TabsTrigger>
+                             <TabsTrigger className="flex-shrink-0 flex items-center gap-2" value="pa_surebet"><Target className="w-4 h-4 text-orange-500"/> P.A. Surebet</TabsTrigger>
+                             <TabsTrigger className="flex-shrink-0 flex items-center gap-2" value="free_spins"><Gift className="w-4 h-4 text-purple-500"/> Giros Grátis</TabsTrigger>
                         </TabsList>
                         
+                        {activeTab !== 'free_spins' && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                             <FormField control={control} name="sport" render={({ field }) => (
                                 <FormItem>
@@ -296,6 +331,7 @@ useEffect(() => {
                                 </FormItem>
                             )} />
                         </div>
+                        )}
                         
                         <TabsContent value="single" className="space-y-4 mt-4">
                             <FormField control={control} name="betType" render={({ field }) => (
@@ -340,6 +376,35 @@ useEffect(() => {
                                     <FormMessage />
                                 </FormItem>
                             )} />
+                        </TabsContent>
+
+                        <TabsContent value="free_spins" className="space-y-4 mt-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <FormLabel>Casa de Apostas</FormLabel>
+                              <Select onValueChange={(v) => setFreeSpinsBookmaker(v)} defaultValue={freeSpinsBookmaker || (bookmakers[0]?.name || '')}>
+                                <FormControl><SelectTrigger className="min-h-11"><SelectValue placeholder="Selecione a casa" /></SelectTrigger></FormControl>
+                                <SelectContent>
+                                  {bookmakers.map((bk) => <SelectItem key={bk.id} value={bk.name}>{bk.name}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-2">
+                              <FormLabel>Quantidade de Giros</FormLabel>
+                              <Input className="h-11" type="number" inputMode="numeric" min={1} step={1} value={freeSpinsCount} onChange={(e) => setFreeSpinsCount(Number(e.target.value))} placeholder="10" />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <FormLabel>Valor Ganho (R$)</FormLabel>
+                              <Input className="h-11" type="number" inputMode="decimal" step="0.01" value={freeSpinsEarned} onChange={(e) => setFreeSpinsEarned(Number(e.target.value))} placeholder="0.00" />
+                            </div>
+                          </div>
+                          <div className="pt-2">
+                            <Button type="button" className="w-full sm:w-auto" onClick={handleSaveFreeSpins}>
+                              Salvar Giros Grátis
+                            </Button>
+                          </div>
                         </TabsContent>
                         
                         <TabsContent value="surebet" className="space-y-4 mt-4">
@@ -603,9 +668,15 @@ useEffect(() => {
                  )}
                 <div className="flex gap-2 ml-auto w-full sm:w-auto">
                     <Button className="w-full sm:w-auto" type="button" variant="ghost" onClick={onCancel} disabled={isSubmitting}>Cancelar</Button>
-                    <Button className="w-full sm:w-auto" type="submit" disabled={isSubmitting}>
+                    {activeTab === 'free_spins' ? (
+                      <Button className="w-full sm:w-auto" type="button" onClick={handleSaveFreeSpins} disabled={isSubmitting}>
+                        Salvar Giros Grátis
+                      </Button>
+                    ) : (
+                      <Button className="w-full sm:w-auto" type="submit" disabled={isSubmitting}>
                         {isSubmitting ? <Loader2 className="animate-spin" /> : (betToEdit ? "Salvar Alterações" : "Adicionar Aposta")}
-                    </Button>
+                      </Button>
+                    )}
                 </div>
             </DialogFooter>
         </form>
