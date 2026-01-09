@@ -1585,7 +1585,7 @@ export default function BetsPage() {
                         <div className="flex items-center gap-2"> <AlertTriangle className="text-destructive"/> Você tem certeza? </div>
                     </AlertDialogTitle>
                     <AlertDialogDescription>
-                        Essa ação não pode ser desfeita. Isso excluirá permanentemente a aposta em <strong className="text-foreground">"{betToDelete?.event}"</strong>.
+                        Essa ação não pode ser desfeita. Isso excluirá permanentemente a aposta em <strong className="text-foreground">&quot;{betToDelete?.event}&quot;</strong>.
                     </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -1636,7 +1636,7 @@ export default function BetsPage() {
                         <div className="flex items-center gap-2"> <AlertTriangle className="text-destructive"/> Tem certeza? </div>
                     </AlertDialogTitle>
                     <AlertDialogDescription>
-                        Isso excluirá permanentemente a casa de apostas <strong className="text-foreground">"{bookmakerToDelete?.name}"</strong> e todo o seu histórico. Essa ação não pode ser desfeita.
+                        Isso excluirá permanentemente a casa de apostas <strong className="text-foreground">&quot;{bookmakerToDelete?.name}&quot;</strong> e todo o seu histórico. Essa ação não pode ser desfeita.
                     </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
