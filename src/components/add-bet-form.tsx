@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
@@ -39,6 +39,8 @@ const formSchema = z.object({
   date: z.date({
     required_error: 'A date for the bet is required.',
   }),
+  accountName: z.string().min(1, { message: 'Informe a conta.' }),
+  accountCpf: z.string().min(1, { message: 'Informe o CPF.' }),
   sport: z.string({
     required_error: 'Please select a sport.',
   }),
@@ -69,8 +71,14 @@ const freeSpinsSchema = z.object({
 
 export function AddBetForm() {
   const router = useRouter();
-  const { addBet, addFreeSpin, bookmakers } = useBets();
+  const { addBet, addFreeSpin, addAccount, accounts, bookmakers } = useBets();
   const { toast } = useToast();
+
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+
+  const accountOptions = useMemo(() => {
+    return (accounts ?? []).slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }, [accounts]);
 
   // Form de Giros Grátis
   const freeSpinsForm = useForm<z.infer<typeof freeSpinsSchema>>({
@@ -86,6 +94,8 @@ export function AddBetForm() {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
+      accountName: '',
+      accountCpf: '',
       event: '',
       betType: '',
       bookmaker: '',
@@ -96,9 +106,46 @@ export function AddBetForm() {
     },
   });
 
+  const normalizeCpf = (cpf: string) => cpf.replace(/\D/g, '');
+
+  const handleSaveAccount = async () => {
+    const accountName = form.getValues('accountName').trim();
+    const accountCpf = form.getValues('accountCpf').trim();
+
+    if (!accountName || !accountCpf) {
+      toast({
+        variant: 'destructive',
+        title: 'Dados inválidos',
+        description: 'Preencha Conta e CPF para salvar.',
+      });
+      return;
+    }
+
+    const normalized = normalizeCpf(accountCpf);
+    const alreadyExists = (accounts ?? []).some((a) => normalizeCpf(a.cpf) === normalized);
+    if (alreadyExists) {
+      toast({
+        title: 'Conta já existe',
+        description: 'Já existe uma conta com esse CPF.',
+      });
+      return;
+    }
+
+    const created = await addAccount({ name: accountName, cpf: accountCpf });
+    if (created) {
+      setSelectedAccountId(created.id);
+      toast({
+        title: 'Conta salva',
+        description: 'Conta/CPF gravados para seleção rápida.',
+      });
+    }
+  };
+
   function onSubmit(values: z.infer<typeof formSchema>) {
     const newBet: Omit<Bet, 'id'> = {
       type: 'single',
+      accountName: values.accountName,
+      accountCpf: values.accountCpf,
       sport: values.sport,
       event: values.event,
       betType: values.betType,
@@ -144,6 +191,66 @@ export function AddBetForm() {
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 sm:space-y-8">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+          {accountOptions.length > 0 && (
+            <div className="sm:col-span-2">
+              <FormLabel>Selecionar Conta Salva</FormLabel>
+              <Select
+                onValueChange={(id) => {
+                  setSelectedAccountId(id);
+                  const found = accountOptions.find((a) => a.id === id);
+                  if (found) {
+                    form.setValue('accountName', found.name, { shouldValidate: true });
+                    form.setValue('accountCpf', found.cpf, { shouldValidate: true });
+                  }
+                }}
+                value={selectedAccountId}
+              >
+                <FormControl>
+                  <SelectTrigger className="min-h-11">
+                    <SelectValue placeholder="Selecione uma conta" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {accountOptions.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name} ({a.cpf})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <FormField
+            control={form.control}
+            name="accountName"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Conta</FormLabel>
+                <FormControl>
+                  <Input className="h-11" autoComplete="on" placeholder="Ex: Conta 1 / Betano João" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="accountCpf"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>CPF</FormLabel>
+                <FormControl>
+                  <Input className="h-11" autoComplete="on" inputMode="numeric" placeholder="Ex: 123.456.789-00" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <div className="sm:col-span-2">
+            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleSaveAccount}>
+              Salvar Conta/CPF
+            </Button>
+          </div>
           <FormField
             control={form.control}
             name="sport"

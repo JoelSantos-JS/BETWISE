@@ -1,6 +1,6 @@
 "use client";
 
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Loader2, ShieldCheck, Trash2, PlusCircle, Star, Target, Gift } from "lucide-react";
@@ -34,6 +34,8 @@ const subBetSchema = z.object({
   odds: z.coerce.number().min(1.01, "Deve ser > 1.00"),
   stake: z.coerce.number().min(0.01, "Deve ser > 0"),
   isFreebet: z.boolean().optional(),
+  accountName: z.string().min(1, "A conta é obrigatória."),
+  accountCpf: z.string().min(1, "O CPF é obrigatório."),
 });
 
 const baseBetSchema = z.object({
@@ -41,6 +43,8 @@ const baseBetSchema = z.object({
   event: z.string().min(3, "O evento deve ter pelo menos 3 caracteres."),
   date: z.date({ required_error: "A data da aposta é obrigatória." }),
   status: z.enum(['pending', 'won', 'lost', 'cashed_out', 'void']),
+  accountName: z.string().optional().nullable(),
+  accountCpf: z.string().optional().nullable(),
   notes: z.string().optional(),
   earnedFreebetValue: z.coerce.number().min(0, "O valor não pode ser negativo").optional().nullable(),
   realizedProfit: z.coerce.number().optional().nullable(),
@@ -49,6 +53,8 @@ const baseBetSchema = z.object({
 
 const singleBetSchema = baseBetSchema.extend({
   type: z.literal('single'),
+  accountName: z.string().min(1, "A conta é obrigatória."),
+  accountCpf: z.string().min(1, "O CPF é obrigatório."),
   betType: z.string().min(3, "O tipo de aposta é obrigatório."),
   stake: z.coerce.number().min(0.01, "O valor apostado deve ser maior que zero."),
   odds: z.coerce.number().min(1.01, "As odds devem ser maiores que 1.00."),
@@ -77,6 +83,18 @@ const betSchema = z.discriminatedUnion("type", [
     paSurebetSchema,
 ]);
 
+type BetFormValues = z.infer<typeof baseBetSchema> & {
+  type: Bet['type'];
+  bookmaker?: string;
+  betType?: string;
+  stake?: number;
+  odds?: number;
+  subBets?: z.infer<typeof subBetSchema>[];
+  totalStake?: number;
+  guaranteedProfit?: number;
+  profitPercentage?: number;
+};
+
 const sportOptions = ["Futebol", "Basquete", "Tênis", "Vôlei", "Futebol Americano", "MMA", "E-Sports", "Outro"];
 const statusOptions: Record<Bet['status'], string> = { pending: 'Pendente', won: 'Ganha', lost: 'Perdida', cashed_out: 'Cash Out', void: 'Anulada' };
 const scenarioOptions: Record<OutcomeScenario, string> = { standard: 'Resultado Padrão', double_green: 'Duplo Green', pa_hedge: 'P.A. com Cobertura' };
@@ -89,7 +107,7 @@ interface BetFormProps {
   bookmakers: Bookmaker[];
 }
 
-const calculateSurebet = (subBets: z.infer<typeof subBetSchema>[] | undefined) => {
+const calculateSurebet = (subBets: Array<{ stake?: number; odds?: number; isFreebet?: boolean }> | undefined) => {
     if (!subBets || subBets.length < 2) {
       return { totalStake: 0, guaranteedProfit: 0, profitPercentage: 0 };
     }
@@ -130,17 +148,26 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
   const [freeSpinsCount, setFreeSpinsCount] = useState<number>(0);
   const [freeSpinsEarned, setFreeSpinsEarned] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<string>(betToEdit ? (betToEdit.type || 'single') : 'single');
-  const { addFreeSpin } = useBets();
+  const { addFreeSpin, addAccount, accounts } = useBets();
   const { toast } = useToast();
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
 
-  const form = useForm<z.infer<typeof betSchema>>({
-    resolver: zodResolver(betSchema),
+  const accountOptions = React.useMemo(() => {
+    return (accounts ?? []).slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }, [accounts]);
+
+  const normalizeCpf = (cpf: string) => cpf.replace(/\D/g, '');
+
+  const form = useForm<BetFormValues>({
+    resolver: zodResolver(betSchema as unknown as z.ZodSchema<BetFormValues>),
     defaultValues: betToEdit ? (betToEdit.type === 'single' ? {
         type: 'single' as const,
         sport: betToEdit.sport,
         event: betToEdit.event,
         date: new Date(betToEdit.date),
         status: betToEdit.status,
+        accountName: betToEdit.accountName || '',
+        accountCpf: betToEdit.accountCpf || '',
         notes: betToEdit.notes,
         earnedFreebetValue: betToEdit.earnedFreebetValue || 0,
         realizedProfit: betToEdit.realizedProfit,
@@ -154,10 +181,16 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
         event: betToEdit.event,
         date: new Date(betToEdit.date),
         status: betToEdit.status,
+        accountName: betToEdit.accountName || '',
+        accountCpf: betToEdit.accountCpf || '',
         notes: betToEdit.notes,
         earnedFreebetValue: betToEdit.earnedFreebetValue || 0,
         realizedProfit: betToEdit.realizedProfit,
-        subBets: betToEdit.subBets || [],
+        subBets: (betToEdit.subBets || []).map((sb) => ({
+          ...sb,
+          accountName: sb.accountName ?? '',
+          accountCpf: sb.accountCpf ?? '',
+        })),
          totalStake: betToEdit.totalStake || undefined,
          guaranteedProfit: betToEdit.guaranteedProfit || undefined,
          profitPercentage: betToEdit.profitPercentage || undefined,
@@ -171,6 +204,8 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
         odds: 1.5,
         status: 'pending',
         date: new Date(),
+        accountName: "",
+        accountCpf: "",
         notes: "",
         earnedFreebetValue: 0,
         bookmaker: bookmakers.length > 0 ? bookmakers[0].name : '',
@@ -189,6 +224,50 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
   useEffect(() => {
     setActiveTab(watchedType);
   }, [watchedType]);
+
+  useEffect(() => {
+    if (!betToEdit) return;
+    const accountName = (betToEdit.accountName ?? '').trim();
+    const accountCpf = (betToEdit.accountCpf ?? '').trim();
+    if (!accountName && !accountCpf) return;
+    const found = accountOptions.find((a) => a.name === accountName && a.cpf === accountCpf);
+    if (found) setSelectedAccountId(found.id);
+  }, [betToEdit, accountOptions]);
+
+  const handleSaveAccount = async () => {
+    const accountName = (watch("accountName") ?? '').trim();
+    const accountCpf = (watch("accountCpf") ?? '').trim();
+
+    if (!accountName || !accountCpf) {
+      toast({
+        title: "Dados inválidos",
+        description: "Preencha Conta e CPF para salvar.",
+        className: "bg-sidebar-accent border-sidebar-border",
+      });
+      return;
+    }
+
+    const normalized = normalizeCpf(accountCpf);
+    const alreadyExists = (accounts ?? []).some((a) => normalizeCpf(a.cpf) === normalized);
+    if (alreadyExists) {
+      toast({
+        title: "Conta já existe",
+        description: "Já existe uma conta com esse CPF.",
+        className: "bg-sidebar-accent border-sidebar-border",
+      });
+      return;
+    }
+
+    const created = await addAccount({ name: accountName, cpf: accountCpf });
+    if (created) {
+      setSelectedAccountId(created.id);
+      toast({
+        title: "Conta salva",
+        description: "Conta/CPF gravados para seleção rápida.",
+        className: "bg-sidebar-accent border-sidebar-border",
+      });
+    }
+  };
   
   const surebetCalculations = React.useMemo(() => {
     if (watchedType !== 'surebet' && watchedType !== 'pa_surebet') return { totalStake: 0, guaranteedProfit: 0, profitPercentage: 0 };
@@ -234,8 +313,9 @@ useEffect(() => {
 }, [watchedStatus, watchedType, watchedSubBets, watchedOutcomeScenario, hedgeOdd, setValue, surebetCalculations, betToEdit]);
 
 
-  const onSubmit = (data: z.infer<typeof betSchema>) => {
-    let finalData: Omit<Bet, 'id'> = JSON.parse(JSON.stringify(data));
+  const onSubmit: SubmitHandler<BetFormValues> = (data) => {
+    const parsed = betSchema.parse(data);
+    let finalData: Omit<Bet, 'id'> = parsed as unknown as Omit<Bet, 'id'>;
 
     if ((finalData.type === 'surebet' || finalData.type === 'pa_surebet') && finalData.subBets) {
         const { totalStake, guaranteedProfit, profitPercentage } = calculateSurebet(finalData.subBets);
@@ -332,6 +412,51 @@ useEffect(() => {
                             )} />
                         </div>
                         )}
+
+                        {activeTab === 'single' && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                            {accountOptions.length > 0 && (
+                              <div className="sm:col-span-2">
+                                <FormLabel>Selecionar Conta Salva</FormLabel>
+                                <Select
+                                  onValueChange={(id) => {
+                                    setSelectedAccountId(id);
+                                    const found = accountOptions.find((a) => a.id === id);
+                                    if (found) {
+                                      setValue('accountName', found.name, { shouldValidate: true });
+                                      setValue('accountCpf', found.cpf, { shouldValidate: true });
+                                    }
+                                  }}
+                                  value={selectedAccountId}
+                                >
+                                  <FormControl><SelectTrigger className="min-h-11"><SelectValue placeholder="Selecione uma conta" /></SelectTrigger></FormControl>
+                                  <SelectContent>
+                                    {accountOptions.map((a) => <SelectItem key={a.id} value={a.id}>{a.name} ({a.cpf})</SelectItem>)}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
+                            <FormField control={control} name="accountName" render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Conta</FormLabel>
+                                    <FormControl><Input className="h-11" autoComplete="on" placeholder="Ex: Conta 1 / Betano João" {...field} value={field.value ?? ''} /></FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )} />
+                            <FormField control={control} name="accountCpf" render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>CPF</FormLabel>
+                                    <FormControl><Input className="h-11" autoComplete="on" inputMode="numeric" placeholder="Ex: 123.456.789-00" {...field} value={field.value ?? ''} /></FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )} />
+                            <div className="sm:col-span-2">
+                              <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={handleSaveAccount}>
+                                Salvar Conta/CPF
+                              </Button>
+                            </div>
+                        </div>
+                        )}
                         
                         <TabsContent value="single" className="space-y-4 mt-4">
                             <FormField control={control} name="betType" render={({ field }) => (
@@ -412,6 +537,47 @@ useEffect(() => {
                             <div className="space-y-4">
                                 {fields.map((item, index) => (
                                     <div key={item.id} className="p-4 bg-muted/50 rounded-lg space-y-3 relative">
+                                        {accountOptions.length > 0 && (
+                                          <div className="space-y-2">
+                                            <FormLabel>Selecionar Conta Salva (Perna)</FormLabel>
+                                            <Select
+                                              onValueChange={(id) => {
+                                                const found = accountOptions.find((a) => a.id === id);
+                                                if (found) {
+                                                  setValue(`subBets.${index}.accountName`, found.name, { shouldValidate: true });
+                                                  setValue(`subBets.${index}.accountCpf`, found.cpf, { shouldValidate: true });
+                                                }
+                                              }}
+                                              value={
+                                                accountOptions.find((a) => (
+                                                  a.name === ((watchedSubBets ?? [])[index]?.accountName ?? '') &&
+                                                  a.cpf === ((watchedSubBets ?? [])[index]?.accountCpf ?? '')
+                                                ))?.id ?? ''
+                                              }
+                                            >
+                                              <FormControl><SelectTrigger className="min-h-11"><SelectValue placeholder="Selecione uma conta" /></SelectTrigger></FormControl>
+                                              <SelectContent>
+                                                {accountOptions.map((a) => <SelectItem key={a.id} value={a.id}>{a.name} ({a.cpf})</SelectItem>)}
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                        )}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                          <FormField control={control} name={`subBets.${index}.accountName`} render={({ field }) => (
+                                            <FormItem>
+                                              <FormLabel>Conta (Perna)</FormLabel>
+                                              <FormControl><Input className="h-11" autoComplete="on" placeholder="Ex: Conta 1 / Betano João" {...field} value={field.value ?? ''} /></FormControl>
+                                              <FormMessage />
+                                            </FormItem>
+                                          )} />
+                                          <FormField control={control} name={`subBets.${index}.accountCpf`} render={({ field }) => (
+                                            <FormItem>
+                                              <FormLabel>CPF (Perna)</FormLabel>
+                                              <FormControl><Input className="h-11" autoComplete="on" inputMode="numeric" placeholder="Ex: 123.456.789-00" {...field} value={field.value ?? ''} /></FormControl>
+                                              <FormMessage />
+                                            </FormItem>
+                                          )} />
+                                        </div>
                                         <FormField control={control} name={`subBets.${index}.bookmaker`} render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel>Casa de Apostas / Exchange</FormLabel>
@@ -464,7 +630,7 @@ useEffect(() => {
                                     </div>
                                 ))}
                             </div>
-                            <Button type="button" variant="outline" size="sm" className="mt-4 w-full sm:w-auto" onClick={() => append({ id: new Date().toISOString() , bookmaker: '', betType: '', odds: 1.5, stake: 0, isFreebet: false })}>
+                            <Button type="button" variant="outline" size="sm" className="mt-4 w-full sm:w-auto" onClick={() => append({ id: new Date().toISOString() , bookmaker: '', betType: '', odds: 1.5, stake: 0, isFreebet: false, accountName: '', accountCpf: '' })}>
                                 <PlusCircle className="mr-2"/> Adicionar Aposta
                             </Button>
                              <FormField control={control} name="earnedFreebetValue" render={({ field }) => (
@@ -481,6 +647,47 @@ useEffect(() => {
                             <div className="space-y-4">
                                 {fields.map((item, index) => (
                                     <div key={item.id} className="p-4 bg-muted/50 rounded-lg space-y-3 relative">
+                                        {accountOptions.length > 0 && (
+                                          <div className="space-y-2">
+                                            <FormLabel>Selecionar Conta Salva (Perna)</FormLabel>
+                                            <Select
+                                              onValueChange={(id) => {
+                                                const found = accountOptions.find((a) => a.id === id);
+                                                if (found) {
+                                                  setValue(`subBets.${index}.accountName`, found.name, { shouldValidate: true });
+                                                  setValue(`subBets.${index}.accountCpf`, found.cpf, { shouldValidate: true });
+                                                }
+                                              }}
+                                              value={
+                                                accountOptions.find((a) => (
+                                                  a.name === ((watchedSubBets ?? [])[index]?.accountName ?? '') &&
+                                                  a.cpf === ((watchedSubBets ?? [])[index]?.accountCpf ?? '')
+                                                ))?.id ?? ''
+                                              }
+                                            >
+                                              <FormControl><SelectTrigger className="min-h-11"><SelectValue placeholder="Selecione uma conta" /></SelectTrigger></FormControl>
+                                              <SelectContent>
+                                                {accountOptions.map((a) => <SelectItem key={a.id} value={a.id}>{a.name} ({a.cpf})</SelectItem>)}
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                        )}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                          <FormField control={control} name={`subBets.${index}.accountName`} render={({ field }) => (
+                                            <FormItem>
+                                              <FormLabel>Conta (Perna)</FormLabel>
+                                              <FormControl><Input className="h-11" autoComplete="on" placeholder="Ex: Conta 1 / Betano João" {...field} value={field.value ?? ''} /></FormControl>
+                                              <FormMessage />
+                                            </FormItem>
+                                          )} />
+                                          <FormField control={control} name={`subBets.${index}.accountCpf`} render={({ field }) => (
+                                            <FormItem>
+                                              <FormLabel>CPF (Perna)</FormLabel>
+                                              <FormControl><Input className="h-11" autoComplete="on" inputMode="numeric" placeholder="Ex: 123.456.789-00" {...field} value={field.value ?? ''} /></FormControl>
+                                              <FormMessage />
+                                            </FormItem>
+                                          )} />
+                                        </div>
                                         <FormField control={control} name={`subBets.${index}.bookmaker`} render={({ field }) => (
                                             <FormItem>
                                                 <FormLabel>Casa de Apostas / Exchange</FormLabel>
@@ -533,7 +740,7 @@ useEffect(() => {
                                     </div>
                                 ))}
                             </div>
-                            <Button type="button" variant="outline" size="sm" className="mt-4 w-full sm:w-auto" onClick={() => append({ id: new Date().toISOString() , bookmaker: '', betType: '', odds: 1.5, stake: 0, isFreebet: false })}>
+                            <Button type="button" variant="outline" size="sm" className="mt-4 w-full sm:w-auto" onClick={() => append({ id: new Date().toISOString() , bookmaker: '', betType: '', odds: 1.5, stake: 0, isFreebet: false, accountName: '', accountCpf: '' })}>
                                 <PlusCircle className="mr-2"/> Adicionar Aposta
                             </Button>
                              <FormField control={control} name="earnedFreebetValue" render={({ field }) => (

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import type { Bet, Bookmaker, FreeSpin } from '@/lib/types';
+import type { Account, Bet, Bookmaker, FreeSpin } from '@/lib/types';
 import { useAuth } from './auth-context';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc, addDoc, Timestamp } from 'firebase/firestore';
@@ -10,10 +10,12 @@ interface BetContextType {
   bets: Bet[];
   bookmakers: Bookmaker[];
   freeSpins: FreeSpin[];
+  accounts: Account[];
   isLoading: boolean;
   addBet: (bet: Omit<Bet, 'id'>) => Promise<void>;
   updateBet: (id: string, bet: Partial<Bet>) => Promise<void>;
   deleteBet: (id: string) => Promise<void>;
+  addAccount: (account: Omit<Account, 'id'>) => Promise<Account | null>;
   addBookmaker: (bookmaker: Omit<Bookmaker, 'id'>) => Promise<void>;
   updateBookmaker: (id: string, bookmaker: Partial<Bookmaker>) => Promise<void>;
   deleteBookmaker: (id: string) => Promise<void>;
@@ -34,6 +36,7 @@ export function BetProvider({ children }: BetProviderProps) {
   const [bets, setBets] = useState<Bet[]>([]);
   const [bookmakers, setBookmakers] = useState<Bookmaker[]>([]);
   const [freeSpins, setFreeSpins] = useState<FreeSpin[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchUserData = async (userId: string) => {
@@ -42,11 +45,13 @@ export function BetProvider({ children }: BetProviderProps) {
       const betsCollectionRef = collection(db, 'users', userId, 'bets');
       const bookmakersCollectionRef = collection(db, 'users', userId, 'bookmakers');
       const freeSpinsCollectionRef = collection(db, 'users', userId, 'freeSpins');
+      const accountsCollectionRef = collection(db, 'users', userId, 'accounts');
 
-      const [betsSnapshot, bookmakersSnapshot, freeSpinsSnapshot] = await Promise.all([
+      const [betsSnapshot, bookmakersSnapshot, freeSpinsSnapshot, accountsSnapshot] = await Promise.all([
         getDocs(betsCollectionRef),
         getDocs(bookmakersCollectionRef),
         getDocs(freeSpinsCollectionRef),
+        getDocs(accountsCollectionRef),
       ]);
 
       const betsData = betsSnapshot.docs.map(doc => {
@@ -72,9 +77,15 @@ export function BetProvider({ children }: BetProviderProps) {
         } as FreeSpin;
       });
 
+      const accountsData = accountsSnapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id,
+      })) as Account[];
+
       setBets(betsData);
       setBookmakers(bookmakersData);
       setFreeSpins(freeSpinsData);
+      setAccounts(accountsData);
     } catch (error) {
       console.error('Error fetching user data:', error);
     } finally {
@@ -88,9 +99,26 @@ export function BetProvider({ children }: BetProviderProps) {
     } else {
       setBets([]);
       setBookmakers([]);
+      setAccounts([]);
       setIsLoading(false);
     }
   }, [user]);
+
+  const addAccount = async (accountData: Omit<Account, 'id'>): Promise<Account | null> => {
+    if (!user?.uid) return null;
+
+    try {
+      const accountsCollectionRef = collection(db, 'users', user.uid, 'accounts');
+      const docRef = await addDoc(accountsCollectionRef, accountData);
+
+      const newAccount: Account = { ...accountData, id: docRef.id };
+      setAccounts(prev => [...prev, newAccount]);
+      return newAccount;
+    } catch (error) {
+      console.error('Error adding account:', error);
+      throw error;
+    }
+  };
 
   const addBet = async (betData: Omit<Bet, 'id'>) => {
     if (!user?.uid) return;
@@ -253,10 +281,12 @@ export function BetProvider({ children }: BetProviderProps) {
     bets,
     bookmakers,
     freeSpins,
+    accounts,
     isLoading,
     addBet,
     updateBet,
     deleteBet,
+    addAccount,
     addBookmaker,
     updateBookmaker,
     deleteBookmaker,

@@ -438,7 +438,7 @@ export default function BetsPage() {
         }
 
         return filtered;
-    }, [bets, filterStatus, dateFilter, customDateStart, customDateEnd, profitFilter, minProfit, maxProfit, dayFilter]);
+    }, [bets, filterStatus, dateFilter, selectedMonth, customDateStart, customDateEnd, profitFilter, minProfit, maxProfit, dayFilter]);
 
     // Filtered statistics
     const filteredStats = useMemo(() => {
@@ -605,6 +605,81 @@ export default function BetsPage() {
         };
     }, [filteredBets]);
 
+    const cpfStats = useMemo(() => {
+        const ensureBucket = (byCpf: Record<string, { key: string; cpf: string; accountName: string; profit: number; betsCount: number }>, rawCpf: string, rawAccountName: string) => {
+            const cleanCpf = rawCpf.trim();
+            const key = cleanCpf || 'SEM_CPF';
+            const cpf = cleanCpf || 'Sem CPF';
+            const accountName = rawAccountName.trim();
+
+            if (!byCpf[key]) {
+                byCpf[key] = { key, cpf, accountName, profit: 0, betsCount: 0 };
+            } else if (!byCpf[key].accountName && accountName) {
+                byCpf[key].accountName = accountName;
+            }
+
+            return byCpf[key];
+        };
+
+        const calcSingleProfit = (bet: Bet) => {
+            if (bet.status === 'pending' || bet.status === 'void') return 0;
+            if (bet.realizedProfit !== null && bet.realizedProfit !== undefined) return bet.realizedProfit;
+            const stake = bet.stake ?? 0;
+            const odds = bet.odds ?? 0;
+            if (bet.status === 'won') return (stake * odds) - stake;
+            if (bet.status === 'lost') return -stake;
+            return 0;
+        };
+
+        const calcSurebetTotalProfit = (bet: Bet) => {
+            if (bet.realizedProfit !== null && bet.realizedProfit !== undefined) return bet.realizedProfit;
+            if (bet.status === 'won') return (bet.guaranteedProfit ?? 0);
+            if (bet.status === 'lost') {
+                const combinedPaidStake = (bet.subBets ?? []).reduce((s, sb) => s + (sb.isFreebet ? 0 : (sb.stake ?? 0)), 0);
+                return -combinedPaidStake;
+            }
+            return 0;
+        };
+
+        const byCpf: Record<string, { key: string; cpf: string; accountName: string; profit: number; betsCount: number }> = {};
+
+        for (const bet of filteredBets) {
+            if (bet.type === 'single') {
+                const bucket = ensureBucket(byCpf, bet.accountCpf ?? '', bet.accountName ?? '');
+                bucket.profit += calcSingleProfit(bet);
+                bucket.betsCount += 1;
+                continue;
+            }
+
+            if (bet.type !== 'surebet' && bet.type !== 'pa_surebet') continue;
+
+            const subBets = bet.subBets ?? [];
+            const totalProfit = calcSurebetTotalProfit(bet);
+
+            if (subBets.length === 0) {
+                const bucket = ensureBucket(byCpf, bet.accountCpf ?? '', bet.accountName ?? '');
+                bucket.profit += totalProfit;
+                bucket.betsCount += 1;
+                continue;
+            }
+
+            const totalWeight = subBets.reduce((s, sb) => s + (sb.stake ?? 0), 0);
+            const shareCount = totalWeight > 0 ? totalWeight : subBets.length;
+
+            for (const sb of subBets) {
+                const cpf = sb.accountCpf ?? bet.accountCpf ?? '';
+                const accountName = sb.accountName ?? bet.accountName ?? '';
+                const bucket = ensureBucket(byCpf, cpf, accountName);
+
+                const weight = totalWeight > 0 ? (sb.stake ?? 0) : 1;
+                bucket.profit += (shareCount > 0 ? (totalProfit * (weight / shareCount)) : 0);
+                bucket.betsCount += 1;
+            }
+        }
+
+        return Object.values(byCpf).sort((a, b) => b.profit - a.profit);
+    }, [filteredBets]);
+
     // Daily breakdown (apostas por dia)
     const dailyStats = useMemo(() => {
         const labels = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
@@ -713,6 +788,110 @@ export default function BetsPage() {
             .filter(d => byDay[d].count > 0);
         return byDay.filter(d => daysToShow.includes(d.day));
     }, [filteredBets, dayFilter]);
+
+    const monthDayStats = useMemo(() => {
+        if (dateFilter !== 'month' && dateFilter !== 'specific_month') return [];
+
+        const base = (dateFilter === 'specific_month' && selectedMonth)
+            ? new Date(`${selectedMonth}-01T00:00:00`)
+            : new Date();
+
+        const year = base.getFullYear();
+        const month = base.getMonth();
+        const daysInMonth = endOfMonth(base).getDate();
+
+        const byDay = Array.from({ length: daysInMonth }, (_, i) => ({
+            key: `${year}-${String(month + 1).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`,
+            day: i + 1,
+            label: String(i + 1),
+            profit: 0,
+            totalStaked: 0,
+            betsCount: 0,
+            freeSpinsCount: 0,
+        }));
+
+        const calcProfit = (bet: Bet) => {
+            if (bet.status === 'pending' || bet.status === 'void') return 0;
+            if (bet.realizedProfit !== null && bet.realizedProfit !== undefined) return bet.realizedProfit;
+            if (bet.type === 'single') {
+                const stake = bet.stake ?? 0;
+                const odds = bet.odds ?? 0;
+                if (bet.status === 'won') return (stake * odds) - stake;
+                if (bet.status === 'lost') return -stake;
+                return 0;
+            }
+            if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+                if (bet.status === 'won') return (bet.guaranteedProfit ?? 0);
+                if (bet.status === 'lost') {
+                    const combinedPaidStake = bet.subBets
+                        ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                        : (bet.totalStake ?? 0);
+                    return -combinedPaidStake;
+                }
+                return 0;
+            }
+            return 0;
+        };
+
+        for (const bet of bets) {
+            const d = new Date(bet.date);
+            if (d.getFullYear() !== year || d.getMonth() !== month) continue;
+            const idx = d.getDate() - 1;
+            const bucket = byDay[idx];
+            if (!bucket) continue;
+
+            bucket.profit += calcProfit(bet);
+
+            if (bet.type === 'single') {
+                bucket.totalStaked += (bet.stake ?? 0);
+            } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+                const combinedPaidStake = bet.subBets
+                    ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                    : (bet.totalStake ?? 0);
+                bucket.totalStaked += combinedPaidStake;
+            }
+
+            bucket.betsCount += 1;
+        }
+
+        for (const fs of freeSpins) {
+            const d = new Date(fs.date);
+            if (d.getFullYear() !== year || d.getMonth() !== month) continue;
+            const idx = d.getDate() - 1;
+            const bucket = byDay[idx];
+            if (!bucket) continue;
+            bucket.profit += (fs.wonAmount ?? 0);
+            bucket.freeSpinsCount += 1;
+        }
+
+        return byDay;
+    }, [bets, freeSpins, dateFilter, selectedMonth]);
+
+    const monthCalendar = useMemo(() => {
+        if (dateFilter !== 'month' && dateFilter !== 'specific_month') return null;
+        if (dateFilter === 'specific_month' && !selectedMonth) return null;
+        if (monthDayStats.length === 0) return null;
+
+        const base = (dateFilter === 'specific_month' && selectedMonth)
+            ? new Date(`${selectedMonth}-01T00:00:00`)
+            : new Date();
+
+        const year = base.getFullYear();
+        const month = base.getMonth();
+        const firstDow = new Date(year, month, 1).getDay(); // 0=Dom
+
+        const monthNames = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+        const title = `${monthNames[month]} ${year}`;
+
+        const cells: Array<(typeof monthDayStats)[number] | null> = [];
+        for (let i = 0; i < firstDow; i += 1) cells.push(null);
+        for (const d of monthDayStats) cells.push(d);
+
+        const totalCells = Math.ceil(cells.length / 7) * 7;
+        while (cells.length < totalCells) cells.push(null);
+
+        return { title, cells };
+    }, [dateFilter, selectedMonth, monthDayStats]);
 
     const monthlyStats = useMemo(() => {
         const byMonth: Record<string, {
@@ -984,6 +1163,8 @@ export default function BetsPage() {
                     'Data': new Date(bet.date).toLocaleDateString('pt-BR'),
                     'Esporte': bet.sport,
                     'Evento': bet.event,
+                    'Conta': bet.accountName ?? '',
+                    'CPF': bet.accountCpf ?? '',
                     'Tipo': bet.type === 'single' ? 'Simples' : (bet.type === 'surebet' ? 'Surebet' : 'P.A. Surebet'),
                     'Seleção/Mercado': bet.type === 'single' ? bet.betType : bet.subBets?.map(sb => `${sb.bookmaker}: ${sb.betType}`).join(' | '),
                     'Casa(s)': bet.type === 'single' ? bet.bookmaker : bet.subBets?.map(sb => sb.bookmaker).join(', '),
@@ -1164,6 +1345,46 @@ export default function BetsPage() {
                 </div>
             </div>
 
+            <div className="mb-8">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-4 gap-4">
+                    <h3 className="text-2xl font-bold flex items-center gap-2">
+                        <Wallet className="w-7 h-7 text-primary" />
+                        Lucro por CPF
+                    </h3>
+                </div>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Consolidado do período filtrado</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {cpfStats.length > 0 ? (
+                            <div className="space-y-2">
+                                {cpfStats.map((row) => (
+                                    <div key={row.key} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 rounded-md bg-muted">
+                                        <div className="min-w-0">
+                                            <div className="font-semibold truncate">{row.cpf}</div>
+                                            {row.accountName ? (
+                                                <div className="text-sm text-muted-foreground truncate">{row.accountName}</div>
+                                            ) : (
+                                                <div className="text-sm text-muted-foreground">—</div>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center justify-between sm:justify-end gap-4">
+                                            <div className="text-sm text-muted-foreground">{row.betsCount} apostas</div>
+                                            <div className={row.profit >= 0 ? "font-bold text-green-500" : "font-bold text-destructive"}>
+                                                {row.profit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-sm text-muted-foreground">Nenhuma aposta encontrada no período.</div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
+
              <div className="mb-8">
                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-4 gap-4">
                      <h3 className="text-2xl font-bold flex items-center gap-2">
@@ -1291,7 +1512,7 @@ export default function BetsPage() {
                 <div className="mb-6">
                     <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
                         <Calendar className="h-5 w-5" />
-                        Resumo por Dia
+                        Resumo por Dia da Semana
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {dailyStats.map(d => (
@@ -1325,6 +1546,62 @@ export default function BetsPage() {
                                 </CardContent>
                             </Card>
                         ))}
+                    </div>
+                </div>
+            )}
+
+            {monthCalendar && (
+                <div className="mb-6">
+                    <h3 className="text-xl font-semibold mb-2 flex items-center gap-2">
+                        <Calendar className="h-5 w-5" />
+                        Calendário do Mês
+                    </h3>
+                    <div className="text-sm text-muted-foreground">{monthCalendar.title}</div>
+
+                    <div className="mt-4 overflow-x-auto rounded-lg border bg-background">
+                        <div className="grid grid-cols-7 min-w-[980px]">
+                            {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((w) => (
+                                <div key={w} className="px-3 py-2 text-center text-sm font-semibold bg-muted/70 border-b">
+                                    {w}
+                                </div>
+                            ))}
+
+                            {monthCalendar.cells.map((d, idx) => {
+                                if (!d) {
+                                    return <div key={`empty-${idx}`} className="min-h-[120px] border-b border-r last:border-r-0 bg-muted/20" />;
+                                }
+
+                                const profitClass = d.profit >= 0 ? 'text-green-500' : 'text-destructive';
+                                const bgClass = d.profit >= 0 ? 'bg-green-500/5' : 'bg-destructive/5';
+
+                                return (
+                                    <div key={d.key} className={`min-h-[120px] border-b border-r last:border-r-0 p-3 ${bgClass}`}>
+                                        <div className="flex items-start justify-between">
+                                            <div className="text-sm font-semibold">Dia {d.day}</div>
+                                            <div className="text-xs text-muted-foreground">{d.betsCount} apostas</div>
+                                        </div>
+                                        <div className="mt-3">
+                                            <div className="text-xs text-muted-foreground">Lucro/Prejuízo</div>
+                                            <div className={`text-lg font-bold ${profitClass}`}>
+                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(d.profit)}
+                                            </div>
+                                        </div>
+                                        <div className="mt-3 grid grid-cols-2 gap-2">
+                                            <div>
+                                                <div className="text-xs text-muted-foreground">Apostado</div>
+                                                <div className="text-sm font-semibold">
+                                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(d.totalStaked)}
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="text-xs text-muted-foreground">Free spins</div>
+                                                <div className="text-sm font-semibold">{d.freeSpinsCount}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
             )}

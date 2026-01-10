@@ -5,12 +5,20 @@ export interface SubBet {
     odds: number;
     stake: number;
     isFreebet?: boolean;
+    accountName?: string | null;
+    accountCpf?: string | null;
 }
 
 export interface Bookmaker {
     id: string;
     name: string;
     initialBankroll: number;
+}
+
+export interface Account {
+    id: string;
+    name: string;
+    cpf: string;
 }
 
 export type OutcomeScenario = 'standard' | 'double_green' | 'pa_hedge';
@@ -30,6 +38,8 @@ export interface Bet {
   event: string;
   date: Date;
   status: 'pending' | 'won' | 'lost' | 'cashed_out' | 'void';
+  accountName?: string | null;
+  accountCpf?: string | null;
   notes?: string;
   earnedFreebetValue?: number | null; // Valor da freebet ganha com esta aposta
   realizedProfit?: number | null; // Lucro final real inserido manualmente

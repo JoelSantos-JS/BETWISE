@@ -98,6 +98,12 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
                     {bet.bookmaker && bet.type === 'single' && (
                         <Badge variant="outline" className="gap-1.5"><Building className="w-3 h-3" /> {bet.bookmaker}</Badge>
                     )}
+                    {bet.accountName && (
+                        <Badge variant="secondary">{bet.accountName}</Badge>
+                    )}
+                    {bet.accountCpf && (
+                        <Badge variant="secondary">{bet.accountCpf}</Badge>
+                    )}
                     {scenarioInfo && scenarioInfo.icon && (
                         <TooltipProvider>
                             <Tooltip>
