@@ -573,6 +573,29 @@ export default function BetsPage() {
             return sum;
         }, 0);
 
+        const realizedPayout = filteredBets.reduce((sum, bet) => {
+            if (bet.type === 'single') {
+                const stake = bet.stake ?? 0;
+                if (bet.realizedProfit != null) return sum + bet.realizedProfit + stake;
+                const odds = bet.odds ?? 0;
+                if (bet.status === 'won') return sum + (stake * odds);
+                if (bet.status === 'void') return sum + stake;
+                return sum;
+            }
+
+            if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+                const combinedPaidStake = bet.subBets
+                    ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                    : (bet.totalStake ?? 0);
+                if (bet.realizedProfit != null) return sum + bet.realizedProfit + combinedPaidStake;
+                if (bet.status === 'won') return sum + (bet.guaranteedProfit ?? 0) + combinedPaidStake;
+                if (bet.status === 'void') return sum + combinedPaidStake;
+                return sum;
+            }
+
+            return sum;
+        }, 0);
+
         const filteredWinRate = filteredBets.length > 0 ? 
             (filteredBets.filter(b => b.status === 'won').length / filteredBets.filter(b => ['won', 'lost'].includes(b.status)).length) * 100 : 0;
 
@@ -588,7 +611,7 @@ export default function BetsPage() {
             return sum;
         }, 0);
 
-        const finalBalance = potentialPayout - totalStaked;
+        const finalBalance = realizedPayout - totalStaked;
 
         return {
             totalBets: filteredBets.length,
@@ -689,6 +712,7 @@ export default function BetsPage() {
             totalStaked: 0,
             potentialGain: 0,
             potentialPayout: 0,
+            realizedPayout: 0,
             lossAmount: 0,
             finalBalance: 0,
             count: 0,
@@ -777,11 +801,32 @@ export default function BetsPage() {
                 }
             }
 
+            if (bet.type === 'single') {
+                const stake = bet.stake ?? 0;
+                if (bet.realizedProfit != null) {
+                    bucket.realizedPayout += bet.realizedProfit + stake;
+                } else {
+                    const odds = bet.odds ?? 0;
+                    if (bet.status === 'won') bucket.realizedPayout += stake * odds;
+                    else if (bet.status === 'void') bucket.realizedPayout += stake;
+                }
+            } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+                const combinedPaidStake = bet.subBets
+                    ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                    : (bet.totalStake ?? 0);
+                if (bet.realizedProfit != null) {
+                    bucket.realizedPayout += bet.realizedProfit + combinedPaidStake;
+                } else {
+                    if (bet.status === 'won') bucket.realizedPayout += (bet.guaranteedProfit ?? 0) + combinedPaidStake;
+                    else if (bet.status === 'void') bucket.realizedPayout += combinedPaidStake;
+                }
+            }
+
             bucket.count += 1;
         }
 
         for (const d of byDay) {
-            d.finalBalance = d.potentialPayout - d.totalStaked;
+            d.finalBalance = d.realizedPayout - d.totalStaked;
         }
 
         const daysToShow = (dayFilter.length > 0 ? dayFilter : byDay.map(d => d.day))
@@ -902,6 +947,7 @@ export default function BetsPage() {
             totalStaked: number;
             potentialGain: number;
             potentialPayout: number;
+            realizedPayout: number;
             lossAmount: number;
             finalBalance: number;
             count: number;
@@ -931,6 +977,7 @@ export default function BetsPage() {
                     totalStaked: 0,
                     potentialGain: 0,
                     potentialPayout: 0,
+                    realizedPayout: 0,
                     lossAmount: 0,
                     finalBalance: 0,
                     count: 0,
@@ -1019,12 +1066,33 @@ export default function BetsPage() {
                 }
             }
 
+            if (bet.type === 'single') {
+                const stake = bet.stake ?? 0;
+                if (bet.realizedProfit != null) {
+                    bucket.realizedPayout += bet.realizedProfit + stake;
+                } else {
+                    const odds = bet.odds ?? 0;
+                    if (bet.status === 'won') bucket.realizedPayout += stake * odds;
+                    else if (bet.status === 'void') bucket.realizedPayout += stake;
+                }
+            } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+                const combinedPaidStake = bet.subBets
+                    ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                    : (bet.totalStake ?? 0);
+                if (bet.realizedProfit != null) {
+                    bucket.realizedPayout += bet.realizedProfit + combinedPaidStake;
+                } else {
+                    if (bet.status === 'won') bucket.realizedPayout += (bet.guaranteedProfit ?? 0) + combinedPaidStake;
+                    else if (bet.status === 'void') bucket.realizedPayout += combinedPaidStake;
+                }
+            }
+
             bucket.count += 1;
         }
 
         const items = Object.values(byMonth).map(b => ({
             ...b,
-            finalBalance: b.potentialPayout - b.totalStaked,
+            finalBalance: b.realizedPayout - b.totalStaked,
         }));
 
         return items.sort((a, b) => (b.year - a.year) || (b.month - a.month));
