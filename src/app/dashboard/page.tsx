@@ -153,6 +153,36 @@ export default function BetsPage() {
             router.replace('/login');
         }
     }, [user, authLoading, fetchUserData, router]);
+
+    const calcBetNet = (bet: Bet) => {
+        if (bet.realizedProfit !== null && bet.realizedProfit !== undefined) return bet.realizedProfit;
+
+        if (bet.type === 'single') {
+            const stake = bet.stake ?? 0;
+            const odds = bet.odds ?? 0;
+            if (bet.status === 'won') return (stake * odds) - stake;
+            if (bet.status === 'lost') return -stake;
+            if (bet.status === 'pending') return stake * (odds - 1);
+            return 0;
+        }
+
+        if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+            const combinedPaidStake = bet.subBets
+                ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+                : (bet.totalStake ?? 0);
+
+            if (bet.status === 'lost') return -combinedPaidStake;
+
+            if (bet.guaranteedProfit !== null && bet.guaranteedProfit !== undefined) {
+                if (bet.status === 'won' || bet.status === 'pending') return bet.guaranteedProfit;
+            }
+
+            if (bet.status === 'won') return (bet.guaranteedProfit ?? 0);
+            return 0;
+        }
+
+        return 0;
+    };
     
     // Memoized calculations
     const summaryStats = useMemo(() => {
@@ -442,29 +472,7 @@ export default function BetsPage() {
 
     // Filtered statistics
     const filteredStats = useMemo(() => {
-        const filteredProfit = filteredBets.reduce((acc, bet) => {
-            if (bet.status === 'pending' || bet.status === 'void') return acc;
-
-            if (bet.realizedProfit !== null && bet.realizedProfit !== undefined) {
-                return acc + bet.realizedProfit;
-            }
-
-            if (bet.type === 'single') {
-                const stake = bet.stake ?? 0;
-                const odds = bet.odds ?? 0;
-                if (bet.status === 'won') return acc + (stake * odds) - stake;
-                if (bet.status === 'lost') return acc - stake;
-                return acc; // cash out sem realizedProfit
-            } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
-                if (bet.status === 'won') {
-                    const profitToUse = bet.guaranteedProfit ?? 0;
-                    return acc + profitToUse;
-                }
-                if (bet.status === 'lost') return acc - (bet.totalStake ?? 0);
-                return acc; // cash out sem realizedProfit
-            }
-            return acc;
-        }, 0);
+        const filteredProfit = filteredBets.reduce((acc, bet) => acc + calcBetNet(bet), 0);
 
         // Total apostado no período filtrado (somando stakes de singles e surebets)
         const totalStaked = filteredBets.reduce((sum, bet) => {
@@ -577,15 +585,8 @@ export default function BetsPage() {
             (filteredBets.filter(b => b.status === 'won').length / filteredBets.filter(b => ['won', 'lost'].includes(b.status)).length) * 100 : 0;
 
         const lossAmount = filteredBets.reduce((sum, bet) => {
-            if (bet.status !== 'lost') return sum;
-            if (bet.type === 'single') return sum + (bet.stake ?? 0);
-            if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
-                const combinedPaidStake = bet.subBets
-                    ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
-                    : (bet.totalStake ?? 0);
-                return sum + combinedPaidStake;
-            }
-            return sum;
+            const net = calcBetNet(bet);
+            return net < 0 ? sum + (-net) : sum;
         }, 0);
 
         const finalBalance = filteredProfit;
@@ -734,17 +735,6 @@ export default function BetsPage() {
                 }
             }
 
-            if (bet.status === 'lost') {
-                if (bet.type === 'single') {
-                    bucket.lossAmount += (bet.stake ?? 0);
-                } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
-                    const combinedPaidStake = bet.subBets
-                        ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
-                        : (bet.totalStake ?? 0);
-                    bucket.lossAmount += combinedPaidStake;
-                }
-            }
-
             // potential payout
             if (bet.realizedProfit != null) {
                 if (bet.type === 'single') {
@@ -776,26 +766,9 @@ export default function BetsPage() {
                     bucket.potentialPayout += Math.max(maxOutcomeReturn, 0);
                 }
             }
-
-            if (bet.status !== 'pending' && bet.status !== 'void') {
-                if (bet.realizedProfit != null) {
-                    bucket.finalBalance += bet.realizedProfit;
-                } else if (bet.type === 'single') {
-                    const stake = bet.stake ?? 0;
-                    const odds = bet.odds ?? 0;
-                    if (bet.status === 'won') bucket.finalBalance += (stake * odds) - stake;
-                    else if (bet.status === 'lost') bucket.finalBalance -= stake;
-                } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
-                    if (bet.status === 'won') {
-                        bucket.finalBalance += (bet.guaranteedProfit ?? 0);
-                    } else if (bet.status === 'lost') {
-                        const combinedPaidStake = bet.subBets
-                            ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
-                            : (bet.totalStake ?? 0);
-                        bucket.finalBalance -= combinedPaidStake;
-                    }
-                }
-            }
+            const net = calcBetNet(bet);
+            bucket.finalBalance += net;
+            if (net < 0) bucket.lossAmount += -net;
 
             bucket.count += 1;
         }
@@ -992,17 +965,6 @@ export default function BetsPage() {
                 }
             }
 
-            if (bet.status === 'lost') {
-                if (bet.type === 'single') {
-                    bucket.lossAmount += (bet.stake ?? 0);
-                } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
-                    const combinedPaidStake = bet.subBets
-                        ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
-                        : (bet.totalStake ?? 0);
-                    bucket.lossAmount += combinedPaidStake;
-                }
-            }
-
             // potential payout
             if (bet.realizedProfit != null) {
                 if (bet.type === 'single') {
@@ -1035,25 +997,9 @@ export default function BetsPage() {
                 }
             }
 
-            if (bet.status !== 'pending' && bet.status !== 'void') {
-                if (bet.realizedProfit != null) {
-                    bucket.finalBalance += bet.realizedProfit;
-                } else if (bet.type === 'single') {
-                    const stake = bet.stake ?? 0;
-                    const odds = bet.odds ?? 0;
-                    if (bet.status === 'won') bucket.finalBalance += (stake * odds) - stake;
-                    else if (bet.status === 'lost') bucket.finalBalance -= stake;
-                } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
-                    if (bet.status === 'won') {
-                        bucket.finalBalance += (bet.guaranteedProfit ?? 0);
-                    } else if (bet.status === 'lost') {
-                        const combinedPaidStake = bet.subBets
-                            ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
-                            : (bet.totalStake ?? 0);
-                        bucket.finalBalance -= combinedPaidStake;
-                    }
-                }
-            }
+            const net = calcBetNet(bet);
+            bucket.finalBalance += net;
+            if (net < 0) bucket.lossAmount += -net;
 
             bucket.count += 1;
         }
