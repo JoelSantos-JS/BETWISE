@@ -17,6 +17,8 @@ type Column = {
   items: Array<{ domain: string; tag?: HouseTag }>;
 };
 
+const lastUpdatedLabel = "23/02/2026";
+
 const tagTextClass: Record<HouseTag, string> = {
   regulated: "text-sky-600 dark:text-sky-400",
   not_recommended: "text-amber-600 dark:text-amber-400",
@@ -200,9 +202,9 @@ const columns: Column[] = [
       { domain: "rico.bet.br" },
       { domain: "sortenabet.bet.br" },
       { domain: "betgorillas.bet.br" },
-      { domain: "apostatudobet.br" },
+      { domain: "apostatudo.bet.br" },
       { domain: "betdasorte.bet.br" },
-      { domain: "joqao.bet.br", tag: "not_recommended" },
+      { domain: "jogao.bet.br", tag: "not_recommended" },
       { domain: "betpontobet.bet.br" },
       { domain: "betfalcons.bet.br" },
       { domain: "betou.bet.br" },
@@ -389,8 +391,9 @@ const columns: Column[] = [
 ];
 
 const normalizeUrl = (domain: string) => {
-  if (domain.startsWith("http://") || domain.startsWith("https://")) return domain;
-  return `https://${domain}`;
+  const trimmed = domain.trim();
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
+  return `https://${trimmed}`;
 };
 
 export default function CasasClonesPage() {
@@ -420,6 +423,7 @@ export default function CasasClonesPage() {
         <p className="text-muted-foreground">
           Separação das casas por grupo e por clone, conforme a tabela.
         </p>
+        <p className="text-xs text-muted-foreground">Atualizado em: {lastUpdatedLabel}</p>
       </div>
 
       <div className="flex flex-wrap gap-5 text-sm mt-4">
@@ -467,7 +471,7 @@ export default function CasasClonesPage() {
                         key={item.domain}
                         href={normalizeUrl(item.domain)}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="noopener noreferrer"
                         className={`block text-sm underline-offset-4 hover:underline ${tagTextClass[tag]}`}
                       >
                         {item.domain}
@@ -483,4 +487,3 @@ export default function CasasClonesPage() {
     </>
   );
 }
-
