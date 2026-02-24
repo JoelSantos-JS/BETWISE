@@ -27,6 +27,8 @@ interface BetInput {
   casa: string;
   odd: number;
   fee: number; // % de taxa
+  cashbackValue?: number; // valor do cashback (percentual ou fixo)
+  cashbackMode?: 'percent' | 'fixed'; // % sobre a stake ou valor fixo (R$)
   minStake?: number;
   maxStake?: number;
   manualStake?: number;
@@ -39,9 +41,9 @@ interface ScenarioMarket {
 
 export function AdvancedSurebetCalculator() {
   const [betInputs, setBetInputs] = useState<BetInput[]>([
-    { id: '1', casa: 'Casa 1', odd: 3.00, fee: 0 },
-    { id: '2', casa: 'Casa 2', odd: 3.50, fee: 0 },
-    { id: '3', casa: 'Casa 3', odd: 3.90, fee: 0 }
+    { id: '1', casa: 'Casa 1', odd: 3.00, fee: 0, cashbackValue: 0, cashbackMode: 'percent' },
+    { id: '2', casa: 'Casa 2', odd: 3.50, fee: 0, cashbackValue: 0, cashbackMode: 'percent' },
+    { id: '3', casa: 'Casa 3', odd: 3.90, fee: 0, cashbackValue: 0, cashbackMode: 'percent' }
   ]);
   
   const [totalInvestment, setTotalInvestment] = useState<number>(200);
@@ -61,6 +63,8 @@ export function AdvancedSurebetCalculator() {
     const fees = betInputs.map(bet => bet.fee);
     const minStakes = betInputs.map(bet => bet.minStake || null);
     const maxStakes = betInputs.map(bet => bet.maxStake || null);
+    const modes = betInputs.map(bet => bet.cashbackMode ?? 'percent');
+    const cbValues = betInputs.map(bet => bet.cashbackValue ?? 0);
     
     // Determina o total a usar
     let totalToUse = totalInvestment;
@@ -78,7 +82,11 @@ export function AdvancedSurebetCalculator() {
       
       const returnsGross = manualStakes.map((stake, i) => stake * odds[i]);
       const returnsNet = returnsGross.map((ret, i) => ret * (1 - fees[i] / 100));
-      const minReturn = Math.min(...returnsNet);
+      // Cashback por perna (considera cashback como crédito independente do resultado)
+      const cbPerLeg = manualStakes.map((stake, i) => modes[i] === 'percent' ? stake * (cbValues[i] / 100) : cbValues[i]);
+      const cashbackTotal = cbPerLeg.reduce((s, v) => s + v, 0);
+      // Ajusta retorno mínimo somando cashback total (é recebido independentemente do cenário)
+      const minReturn = Math.min(...returnsNet.map(v => v + cashbackTotal));
       const profit = minReturn - totalManual;
       const roi = (profit / totalManual) * 100;
       
@@ -89,6 +97,7 @@ export function AdvancedSurebetCalculator() {
         totalInvestido: totalManual,
         returnsBrutos: returnsGross,
         returnsLiquidos: returnsNet,
+        cashbackTotal,
         menorRetorno: minReturn,
         lucro: profit,
         roi,
@@ -97,7 +106,7 @@ export function AdvancedSurebetCalculator() {
       };
     } else {
       // Modo automático: usa a biblioteca, ignorando checagem de surebet
-      return allocateStakes({
+      const base = allocateStakes({
         odds,
         total: totalToUse,
         fees,
@@ -105,6 +114,21 @@ export function AdvancedSurebetCalculator() {
         maxStake: maxStakes,
         skipSurebetCheck: true
       });
+      if (!base.ok || !base.stakes || !base.returnsLiquidos) return base;
+      // Calcula cashback com stakes alocados
+      const cbPerLeg = base.stakes.map((stake: number, i: number) => modes[i] === 'percent' ? stake * (cbValues[i] / 100) : cbValues[i]);
+      const cashbackTotal = cbPerLeg.reduce((s, v) => s + v, 0);
+      const adjustedReturns = base.returnsLiquidos.map((ret: number) => ret + cashbackTotal);
+      const minReturn = Math.min(...adjustedReturns);
+      const profit = minReturn - base.totalInvestido;
+      const roi = (profit / base.totalInvestido) * 100;
+      return {
+        ...base,
+        cashbackTotal,
+        menorRetorno: minReturn,
+        lucro: profit,
+        roi
+      };
     }
   }, [betInputs, totalInvestment, desiredProfit, useDesiredProfit]);
 
@@ -260,7 +284,7 @@ export function AdvancedSurebetCalculator() {
                   </div>
                   
                   {/* Inputs principais em grid responsivo */}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-3">
                     <div className="space-y-1">
                       <Label className="text-xs font-medium text-muted-foreground">Nome da Casa</Label>
                       <Input
@@ -290,6 +314,41 @@ export function AdvancedSurebetCalculator() {
                         onChange={(e) => handleBetInputChange(bet.id, 'fee', Number(e.target.value))}
                         className="h-9 text-sm text-center"
                       />
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-xs font-medium text-muted-foreground">Cashback</Label>
+                      <div className="flex gap-1">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={bet.cashbackValue ?? 0}
+                          onChange={(e) => handleBetInputChange(bet.id, 'cashbackValue', Number(e.target.value))}
+                          className="h-9 text-sm text-center"
+                        />
+                        <div className="flex">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={(bet.cashbackMode ?? 'percent') === 'fixed' ? "default" : "outline"}
+                            onClick={() => handleBetInputChange(bet.id, 'cashbackMode', 'fixed')}
+                            className="text-xs px-2"
+                            title="R$"
+                          >
+                            R$
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={(bet.cashbackMode ?? 'percent') === 'percent' ? "default" : "outline"}
+                            onClick={() => handleBetInputChange(bet.id, 'cashbackMode', 'percent')}
+                            className="text-xs px-2"
+                            title="%"
+                          >
+                            %
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                     
                     <div className="space-y-1">
@@ -406,7 +465,12 @@ export function AdvancedSurebetCalculator() {
                     <p className="text-xl font-bold">R$ {calculation.lucro?.toFixed(2)}</p>
                   </CardContent>
                 </Card>
-                
+                <Card className="bg-gradient-to-br from-emerald-500 to-emerald-600 text-white">
+                  <CardContent className="p-4 text-center">
+                    <p className="text-xs opacity-90 mb-1">Cashback Total</p>
+                    <p className="text-xl font-bold">R$ {(calculation as any).cashbackTotal?.toFixed(2) ?? '0.00'}</p>
+                  </CardContent>
+                </Card>
                 <Card className="bg-gradient-to-br from-orange-500 to-orange-600 text-white">
                   <CardContent className="p-4 text-center">
                     <p className="text-xs opacity-90 mb-1">ROI Real</p>

@@ -36,6 +36,8 @@ const subBetSchema = z.object({
   isFreebet: z.boolean().optional(),
   accountName: z.string().min(1, "A conta é obrigatória."),
   accountCpf: z.string().min(1, "O CPF é obrigatório."),
+  cashbackValue: z.coerce.number().min(0).optional(),
+  cashbackMode: z.enum(['percent','fixed']).optional(),
 });
 
 const baseBetSchema = z.object({
@@ -107,7 +109,7 @@ interface BetFormProps {
   bookmakers: Bookmaker[];
 }
 
-const calculateSurebet = (subBets: Array<{ stake?: number; odds?: number; isFreebet?: boolean }> | undefined) => {
+const calculateSurebet = (subBets: Array<{ stake?: number; odds?: number; isFreebet?: boolean; cashbackValue?: number | null; cashbackMode?: 'percent' | 'fixed' | null }> | undefined) => {
     if (!subBets || subBets.length < 2) {
       return { totalStake: 0, guaranteedProfit: 0, profitPercentage: 0 };
     }
@@ -122,15 +124,21 @@ const calculateSurebet = (subBets: Array<{ stake?: number; odds?: number; isFree
     }
     
     // 2. Retornos Potenciais: Calcula o retorno líquido de cada "perna" da aposta.
+    const totalCashback = subBets.reduce((acc, bet) => {
+      const stake = bet.stake || 0;
+      const v = bet.cashbackValue ?? 0;
+      const m = bet.cashbackMode ?? 'percent';
+      const cb = m === 'percent' ? stake * (v / 100) : v;
+      return acc + cb;
+    }, 0);
+
     const potentialReturns = subBets.map(bet => {
         const stake = bet.stake || 0;
         const odds = bet.odds || 0;
         
-        // Se esta perna ganhar, qual o retorno líquido?
-        // Retorno Bruto - Custo Real Total
         const grossReturn = bet.isFreebet ? stake * (odds - 1) : stake * odds;
         
-        return grossReturn - totalStake;
+        return grossReturn + totalCashback - totalStake;
     });
 
     // 3. Lucro Garantido: É o pior cenário entre todos os retornos líquidos.
@@ -190,6 +198,8 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
           ...sb,
           accountName: sb.accountName ?? '',
           accountCpf: sb.accountCpf ?? '',
+          cashbackValue: sb.cashbackValue ?? undefined,
+          cashbackMode: (sb.cashbackMode as any) ?? undefined,
         })),
          totalStake: betToEdit.totalStake || undefined,
          guaranteedProfit: betToEdit.guaranteedProfit || undefined,
@@ -376,8 +386,8 @@ useEffect(() => {
             {betToEdit ? "Ajuste os detalhes da sua aposta." : "Registre uma aposta simples ou uma surebet para acompanhar."}
         </DialogDescription>
       </DialogHeader>
-      <Form {...form}>
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
+      <Form {...(form as any)}>
+        <form onSubmit={handleSubmit(onSubmit) as any} className="flex flex-col flex-1 min-h-0">
             <ScrollArea className="flex-1 min-h-0">
                 <div className="space-y-4 px-6 py-2">
                     
@@ -608,6 +618,72 @@ useEffect(() => {
                                                 </FormItem>
                                             )} />
                                         </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                          <FormField control={control} name={`subBets.${index}.cashbackValue`} render={({ field }) => (
+                                            <FormItem>
+                                              <FormLabel>Cashback</FormLabel>
+                                              <FormControl><Input className="h-11" type="number" inputMode="decimal" step="0.01" placeholder="0" {...field} value={field.value ?? ''} /></FormControl>
+                                              <FormMessage />
+                                            </FormItem>
+                                          )} />
+                                          <FormField control={control} name={`subBets.${index}.cashbackMode`} render={({ field }) => (
+                                            <FormItem>
+                                              <FormLabel>Modo</FormLabel>
+                                              <div className="flex gap-2">
+                                                <Button type="button" variant={(field.value ?? 'percent') === 'fixed' ? 'default' : 'outline'} onClick={() => field.onChange('fixed')}>R$</Button>
+                                                <Button type="button" variant={(field.value ?? 'percent') === 'percent' ? 'default' : 'outline'} onClick={() => field.onChange('percent')}>%</Button>
+                                              </div>
+                                              <FormMessage />
+                                            </FormItem>
+                                          )} />
+                                          <div className="space-y-2">
+                                            <FormLabel>Prévia</FormLabel>
+                                            <div className="h-11 flex items-center px-3 rounded-md border text-sm">
+                                              {(() => {
+                                                const sb = (watchedSubBets ?? [])[index];
+                                                const v = sb?.cashbackValue ?? 0;
+                                                const m = sb?.cashbackMode ?? 'percent';
+                                                const stake = Number(sb?.stake ?? 0);
+                                                const cb = m === 'percent' ? stake * (v/100) : v;
+                                                const net = Math.max(stake - cb, 0);
+                                                return `Cashback: R$ ${cb.toFixed(2)} · Custo líquido: R$ ${net.toFixed(2)}`;
+                                              })()}
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                          <FormField control={control} name={`subBets.${index}.cashbackValue`} render={({ field }) => (
+                                            <FormItem>
+                                              <FormLabel>Cashback</FormLabel>
+                                              <FormControl><Input className="h-11" type="number" inputMode="decimal" step="0.01" placeholder="0" {...field} value={field.value ?? ''} /></FormControl>
+                                              <FormMessage />
+                                            </FormItem>
+                                          )} />
+                                          <FormField control={control} name={`subBets.${index}.cashbackMode`} render={({ field }) => (
+                                            <FormItem>
+                                              <FormLabel>Modo</FormLabel>
+                                              <div className="flex gap-2">
+                                                <Button type="button" variant={(field.value ?? 'percent') === 'fixed' ? 'default' : 'outline'} onClick={() => field.onChange('fixed')}>R$</Button>
+                                                <Button type="button" variant={(field.value ?? 'percent') === 'percent' ? 'default' : 'outline'} onClick={() => field.onChange('percent')}>%</Button>
+                                              </div>
+                                              <FormMessage />
+                                            </FormItem>
+                                          )} />
+                                          <div className="space-y-2">
+                                            <FormLabel>Prévia</FormLabel>
+                                            <div className="h-11 flex items-center px-3 rounded-md border text-sm">
+                                              {(() => {
+                                                const sb = (watchedSubBets ?? [])[index];
+                                                const v = sb?.cashbackValue ?? 0;
+                                                const m = sb?.cashbackMode ?? 'percent';
+                                                const stake = Number(sb?.stake ?? 0);
+                                                const cb = m === 'percent' ? stake * (v/100) : v;
+                                                const net = Math.max(stake - cb, 0);
+                                                return `Cashback: R$ ${cb.toFixed(2)} · Custo líquido: R$ ${net.toFixed(2)}`;
+                                              })()}
+                                            </div>
+                                          </div>
+                                        </div>
                                          <FormField
                                             control={control}
                                             name={`subBets.${index}.isFreebet`}
@@ -630,7 +706,7 @@ useEffect(() => {
                                     </div>
                                 ))}
                             </div>
-                            <Button type="button" variant="outline" size="sm" className="mt-4 w-full sm:w-auto" onClick={() => append({ id: new Date().toISOString() , bookmaker: '', betType: '', odds: 1.5, stake: 0, isFreebet: false, accountName: '', accountCpf: '' })}>
+                            <Button type="button" variant="outline" size="sm" className="mt-4 w-full sm:w-auto" onClick={() => append({ id: new Date().toISOString() , bookmaker: '', betType: '', odds: 1.5, stake: 0, isFreebet: false, cashbackValue: 0, cashbackMode: 'percent', accountName: '', accountCpf: '' })}>
                                 <PlusCircle className="mr-2"/> Adicionar Aposta
                             </Button>
                              <FormField control={control} name="earnedFreebetValue" render={({ field }) => (
@@ -718,6 +794,39 @@ useEffect(() => {
                                                 </FormItem>
                                             )} />
                                         </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                          <FormField control={control} name={`subBets.${index}.cashbackValue`} render={({ field }) => (
+                                            <FormItem>
+                                              <FormLabel>Cashback</FormLabel>
+                                              <FormControl><Input className="h-11" type="number" inputMode="decimal" step="0.01" placeholder="0" {...field} value={field.value ?? ''} /></FormControl>
+                                              <FormMessage />
+                                            </FormItem>
+                                          )} />
+                                          <FormField control={control} name={`subBets.${index}.cashbackMode`} render={({ field }) => (
+                                            <FormItem>
+                                              <FormLabel>Modo</FormLabel>
+                                              <div className="flex gap-2">
+                                                <Button type="button" variant={(field.value ?? 'percent') === 'fixed' ? 'default' : 'outline'} onClick={() => field.onChange('fixed')}>R$</Button>
+                                                <Button type="button" variant={(field.value ?? 'percent') === 'percent' ? 'default' : 'outline'} onClick={() => field.onChange('percent')}>%</Button>
+                                              </div>
+                                              <FormMessage />
+                                            </FormItem>
+                                          )} />
+                                          <div className="space-y-2">
+                                            <FormLabel>Prévia</FormLabel>
+                                            <div className="h-11 flex items-center px-3 rounded-md border text-sm">
+                                              {(() => {
+                                                const sb = (watchedSubBets ?? [])[index];
+                                                const v = sb?.cashbackValue ?? 0;
+                                                const m = sb?.cashbackMode ?? 'percent';
+                                                const stake = Number(sb?.stake ?? 0);
+                                                const cb = m === 'percent' ? stake * (v/100) : v;
+                                                const net = Math.max(stake - cb, 0);
+                                                return `Cashback: R$ ${cb.toFixed(2)} · Custo líquido: R$ ${net.toFixed(2)}`;
+                                              })()}
+                                            </div>
+                                          </div>
+                                        </div>
                                          <FormField
                                             control={control}
                                             name={`subBets.${index}.isFreebet`}
@@ -740,7 +849,7 @@ useEffect(() => {
                                     </div>
                                 ))}
                             </div>
-                            <Button type="button" variant="outline" size="sm" className="mt-4 w-full sm:w-auto" onClick={() => append({ id: new Date().toISOString() , bookmaker: '', betType: '', odds: 1.5, stake: 0, isFreebet: false, accountName: '', accountCpf: '' })}>
+                            <Button type="button" variant="outline" size="sm" className="mt-4 w-full sm:w-auto" onClick={() => append({ id: new Date().toISOString() , bookmaker: '', betType: '', odds: 1.5, stake: 0, isFreebet: false, cashbackValue: 0, cashbackMode: 'percent', accountName: '', accountCpf: '' })}>
                                 <PlusCircle className="mr-2"/> Adicionar Aposta
                             </Button>
                              <FormField control={control} name="earnedFreebetValue" render={({ field }) => (

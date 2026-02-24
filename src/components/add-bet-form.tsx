@@ -60,6 +60,8 @@ const formSchema = z.object({
     message: 'Odds must be greater than 1.00.',
   }),
   status: z.enum(['pending', 'won', 'lost']),
+  cashbackValue: z.coerce.number().min(0).optional(),
+  cashbackMode: z.enum(['percent', 'fixed']).optional(),
 });
 
 const freeSpinsSchema = z.object({
@@ -103,6 +105,8 @@ export function AddBetForm() {
       odds: 2.0,
       status: 'pending',
       date: new Date(),
+      cashbackValue: 0,
+      cashbackMode: 'percent',
     },
   });
 
@@ -154,6 +158,8 @@ export function AddBetForm() {
       odds: values.odds,
       status: values.status,
       date: values.date,
+      cashbackValue: values.cashbackValue ?? 0,
+      cashbackMode: values.cashbackMode ?? 'percent',
     };
     addBet(newBet);
     toast({
@@ -425,6 +431,53 @@ export function AddBetForm() {
               </FormItem>
             )}
           />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+          <FormField
+            control={form.control}
+            name="cashbackValue"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Cashback</FormLabel>
+                <FormControl>
+                  <Input className="h-11" type="number" inputMode="decimal" step="0.01" placeholder="0" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="cashbackMode"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Modo</FormLabel>
+                <div className="flex gap-2">
+                  <Button type="button" variant={field.value === 'fixed' ? 'default' : 'outline'} onClick={() => field.onChange('fixed')}>
+                    R$
+                  </Button>
+                  <Button type="button" variant={field.value === 'percent' ? 'default' : 'outline'} onClick={() => field.onChange('percent')}>
+                    %
+                  </Button>
+                </div>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <div className="space-y-2">
+            <FormLabel>Prévia</FormLabel>
+            <div className="h-11 flex items-center px-3 rounded-md border text-sm">
+              {(() => {
+                const stake = form.getValues('stake') ?? 0;
+                const v = form.getValues('cashbackValue') ?? 0;
+                const mode = form.getValues('cashbackMode') ?? 'percent';
+                const cb = mode === 'percent' ? stake * (v / 100) : v;
+                const net = Math.max(stake - cb, 0);
+                return `Cashback: R$ ${cb.toFixed(2)} · Custo líquido: R$ ${net.toFixed(2)}`;
+              })()}
+            </div>
+          </div>
         </div>
 
         <Button type="submit" size="lg" className="w-full md:w-auto">

@@ -5,6 +5,8 @@ export interface SubBet {
     odds: number;
     stake: number;
     isFreebet?: boolean;
+    cashbackValue?: number | null;
+    cashbackMode?: 'percent' | 'fixed' | null;
     accountName?: string | null;
     accountCpf?: string | null;
 }
@@ -50,6 +52,8 @@ export interface Bet {
   betType?: string | null;
   stake?: number | null;
   odds?: number | null;
+  cashbackValue?: number | null;
+  cashbackMode?: 'percent' | 'fixed' | null;
   
   // For 'surebet' or 'pa_surebet'
   subBets?: SubBet[] | null;
