@@ -1010,6 +1010,24 @@ export default function BetsPage() {
     }, [filteredBets]);
     
     // CRUD Handlers for Bets
+    const sanitizeForFirestore = (input: any): any => {
+        if (Array.isArray(input)) {
+            return input.map(v => sanitizeForFirestore(v));
+        }
+        if (input && typeof input === 'object' && !(input instanceof Date)) {
+            const out: Record<string, any> = {};
+            for (const [k, v] of Object.entries(input)) {
+                const sv = sanitizeForFirestore(v as any);
+                if (sv !== undefined) out[k] = sv;
+            }
+            return out;
+        }
+        if (typeof input === 'number' && !Number.isFinite(input)) {
+            return null;
+        }
+        return input;
+    };
+
     const handleOpenBetForm = (bet: Bet | null = null) => {
         setBetToEdit(bet);
         setIsBetFormOpen(true);
@@ -1018,13 +1036,13 @@ export default function BetsPage() {
     const handleSaveBet = async (betData: Omit<Bet, 'id'>) => {
          if (!user) { toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado.' }); return; }
         const isEditing = !!betToEdit;
-        const betToSave = { ...betData, date: Timestamp.fromDate(new Date(betData.date)) };
+        const betToSave = sanitizeForFirestore({ ...betData, date: Timestamp.fromDate(new Date(betData.date)) });
         const betsCollectionRef = collection(db, 'users', user.uid, 'bets');
 
         try {
             if (isEditing) {
                 const betDocRef = doc(betsCollectionRef, betToEdit.id);
-                await setDoc(betDocRef, betToSave);
+                await setDoc(betDocRef, betToSave, { merge: true });
                 // @ts-ignore
                 setBets(bets.map(b => (b.id === betToEdit.id ? { ...betToSave, id: b.id, date: new Date(betData.date) } as Bet : b)));
                 toast({ title: "Aposta Atualizada!", description: `A aposta no evento "${betData.event}" foi atualizada.` });
