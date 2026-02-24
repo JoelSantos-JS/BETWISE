@@ -67,7 +67,7 @@ export default function BetsPage() {
     const [overrideCurrent, setOverrideCurrent] = useState<string>("");
 
     // Filter states
-    const [filterStatus, setFilterStatus] = useState<string>("pending");
+    const [filterStatus, setFilterStatus] = useState<string>("all");
     const [dateFilter, setDateFilter] = useState<string>("all");
     const [dayFilter, setDayFilter] = useState<number[]>([]); // 0=Dom, 6=Sáb
     const [customDateStart, setCustomDateStart] = useState<string>("");
@@ -76,6 +76,9 @@ export default function BetsPage() {
     const [profitFilter, setProfitFilter] = useState<string>("all");
     const [minProfit, setMinProfit] = useState<string>("");
     const [maxProfit, setMaxProfit] = useState<string>("");
+    const [showAllRaw, setShowAllRaw] = useState<boolean>(false);
+    const [lastSavedId, setLastSavedId] = useState<string | null>(null);
+    const [lastSavedPresent, setLastSavedPresent] = useState<boolean | null>(null);
     
     const { toast } = useToast();
 
@@ -95,13 +98,22 @@ export default function BetsPage() {
 
             const betsData = betsSnapshot.docs.map(doc => {
                 const data = doc.data();
+                const rawDate = (data as any).date;
+                const parsedDate = rawDate instanceof Timestamp
+                    ? rawDate.toDate()
+                    : (rawDate ? new Date(rawDate) : new Date());
                 return {
                     ...data,
                     id: doc.id,
-                    date: data.date instanceof Timestamp ? data.date.toDate() : new Date(data.date)
+                    date: isNaN(parsedDate.getTime()) ? new Date() : parsedDate
                 } as Bet;
-            });
+            }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             setBets(betsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+            if (lastSavedId) {
+                setLastSavedPresent(betsData.some(b => b.id === lastSavedId));
+            } else {
+                setLastSavedPresent(null);
+            }
             
             const bookmakersData = bookmakersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }) as BookmakerType);
             setBookmakers(bookmakersData);
@@ -143,7 +155,7 @@ export default function BetsPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [toast]);
+    }, [toast, lastSavedId]);
 
     useEffect(() => {
         if (user) {
@@ -696,8 +708,15 @@ export default function BetsPage() {
         }));
 
         for (const bet of filteredBets) {
-            const idx = new Date(bet.date).getDay();
+            const dt = new Date(bet.date);
+            if (Number.isNaN(dt.getTime())) {
+                continue;
+            }
+            const idx = dt.getDay();
             const bucket = byDay[idx];
+            if (!bucket) {
+                continue;
+            }
 
             // staked
             if (bet.type === 'single') {
@@ -1046,11 +1065,24 @@ export default function BetsPage() {
                 // @ts-ignore
                 setBets(bets.map(b => (b.id === betToEdit.id ? { ...betToSave, id: b.id, date: new Date(betData.date) } as Bet : b)));
                 toast({ title: "Aposta Atualizada!", description: `A aposta no evento "${betData.event}" foi atualizada.` });
+                setLastSavedId(betToEdit.id);
             } else {
                 const newDocRef = await addDoc(betsCollectionRef, betToSave);
                 setBets(prev => [{...betData, id: newDocRef.id } as Bet, ...prev].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
                 toast({ title: "Aposta Adicionada!", description: `Sua aposta em "${betData.event}" foi registrada.` });
+                setLastSavedId(newDocRef.id);
             }
+            // Recarrega do Firestore para garantir sincronia
+            await fetchUserData(user.uid);
+            // Garante que os filtros não escondam o item recém salvo
+            setFilterStatus('all');
+            setDateFilter('all');
+            setProfitFilter('all');
+            setDayFilter([]);
+            setCustomDateStart('');
+            setCustomDateEnd('');
+            setMinProfit('');
+            setMaxProfit('');
         } catch (error) {
             console.error("Error saving bet:", error);
             toast({ variant: 'destructive', title: 'Erro ao salvar', description: 'Não foi possível salvar a aposta no banco de dados.' });
@@ -1272,10 +1304,11 @@ export default function BetsPage() {
 
 
     const renderBetList = () => {
-        if (filteredBets.length > 0) {
+        const list = showAllRaw ? bets : filteredBets;
+        if (list.length > 0) {
             return (
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {filteredBets.map(bet => (
+                    {list.map(bet => (
                         <BetCard 
                             key={bet.id} 
                             bet={bet} 
@@ -1800,15 +1833,31 @@ export default function BetsPage() {
                         >
                             Limpar Filtros
                         </Button>
+                        <Button 
+                            variant="outline" 
+                            onClick={() => user && fetchUserData(user.uid)}
+                            className="w-full"
+                        >
+                            Recarregar do Servidor
+                        </Button>
+                        <div className="flex items-center gap-2">
+                            <input id="show-all-raw" type="checkbox" checked={showAllRaw} onChange={(e) => setShowAllRaw(e.target.checked)} />
+                            <Label htmlFor="show-all-raw" className="text-xs">Mostrar tudo (ignorar filtros)</Label>
+                        </div>
                         <div className="text-xs text-muted-foreground">
-                            {filteredStats.totalBets} de {summaryStats.totalBets} apostas
+                            {showAllRaw ? bets.length : filteredStats.totalBets} de {summaryStats.totalBets} apostas
                         </div>
                     </div>
                 </div>
              </div>
 
              <h3 className="text-2xl font-bold mb-4">Minhas Apostas</h3>
-            <Tabs defaultValue="all" onValueChange={setFilterStatus} className="w-full">
+            {lastSavedId && (
+                <div className="mb-4 text-xs text-muted-foreground">
+                    Última aposta salva: <span className="font-mono">{lastSavedId}</span> — {lastSavedPresent == null ? 'verificando...' : lastSavedPresent ? 'encontrada' : 'não encontrada'}
+                </div>
+            )}
+            <Tabs value={filterStatus} onValueChange={setFilterStatus} className="w-full">
                 <TabsList className="w-full mb-6 overflow-x-auto whitespace-nowrap flex gap-2">
                     <TabsTrigger value="all">Todas</TabsTrigger>
                     <TabsTrigger value="pending">Em Andamento</TabsTrigger>

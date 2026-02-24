@@ -202,11 +202,11 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
                                                     {sub.isFreebet && <Star className="w-4 h-4 text-yellow-500" />}
                                                     {sub.bookmaker}
                                                 </span>
-                                                <Badge variant="outline">@{sub.odds.toFixed(2)}</Badge>
+                                                <Badge variant="outline">@{typeof sub.odds === 'number' ? sub.odds.toFixed(2) : '--'}</Badge>
                                             </div>
                                             <div className='text-xs text-muted-foreground'>{sub.betType}</div>
                                             <div className='text-right font-bold text-primary mt-1'>
-                                                {sub.stake.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                {(typeof sub.stake === 'number' ? sub.stake : 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                                 {sub.isFreebet && <span className='text-xs font-normal text-muted-foreground'> (Freebet)</span>}
                                             </div>
                                         </li>
