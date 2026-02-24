@@ -39,6 +39,22 @@ export function BetProvider({ children }: BetProviderProps) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Remove campos undefined (o Firestore não aceita undefined)
+  const deepStripUndefined = (input: any): any => {
+    if (Array.isArray(input)) {
+      return input.map((v) => deepStripUndefined(v));
+    }
+    if (input && typeof input === 'object' && !(input instanceof Date)) {
+      const out: Record<string, any> = {};
+      Object.keys(input).forEach((k) => {
+        const v = deepStripUndefined((input as any)[k]);
+        if (v !== undefined) out[k] = v;
+      });
+      return out;
+    }
+    return input;
+  };
+
   const fetchUserData = async (userId: string) => {
     setIsLoading(true);
     try {
@@ -125,10 +141,11 @@ export function BetProvider({ children }: BetProviderProps) {
 
     try {
       const betsCollectionRef = collection(db, 'users', user.uid, 'bets');
-      const docRef = await addDoc(betsCollectionRef, {
+      const toSave = deepStripUndefined({
         ...betData,
         date: Timestamp.fromDate(betData.date),
       });
+      const docRef = await addDoc(betsCollectionRef, toSave);
 
       const newBet = { ...betData, id: docRef.id };
       setBets(prev => [...prev, newBet]);
@@ -143,10 +160,10 @@ export function BetProvider({ children }: BetProviderProps) {
 
     try {
       const betDocRef = doc(db, 'users', user.uid, 'bets', id);
-      const updateData = {
+      const updateData = deepStripUndefined({
         ...betData,
         ...(betData.date && { date: Timestamp.fromDate(betData.date) }),
-      };
+      });
       
       await setDoc(betDocRef, updateData, { merge: true });
       
