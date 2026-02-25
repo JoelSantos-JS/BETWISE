@@ -67,8 +67,8 @@ export default function BetsPage() {
     const [overrideCurrent, setOverrideCurrent] = useState<string>("");
 
     // Filter states
-    const [filterStatus, setFilterStatus] = useState<string>("pending");
-    const [dateFilter, setDateFilter] = useState<string>("all");
+    const [filterStatus, setFilterStatus] = useState<string>("all");
+    const [dateFilter, setDateFilter] = useState<string>("today");
     const [dayFilter, setDayFilter] = useState<number[]>([]); // 0=Dom, 6=Sáb
     const [customDateStart, setCustomDateStart] = useState<string>("");
     const [customDateEnd, setCustomDateEnd] = useState<string>("");
@@ -1074,6 +1074,8 @@ export default function BetsPage() {
             }
             // Recarrega do Firestore para garantir sincronia
             await fetchUserData(user.uid);
+            // Não mostrar tudo automaticamente após salvar
+            setShowAllRaw(false);
         } catch (error) {
             console.error("Error saving bet:", error);
             toast({ variant: 'destructive', title: 'Erro ao salvar', description: 'Não foi possível salvar a aposta no banco de dados.' });
@@ -1812,7 +1814,7 @@ export default function BetsPage() {
                         <Button 
                             variant="outline" 
                             onClick={() => {
-                                setDateFilter('all');
+                                setDateFilter('today');
                                 setProfitFilter('all');
                                 setDayFilter([]);
                                 setCustomDateStart('');
