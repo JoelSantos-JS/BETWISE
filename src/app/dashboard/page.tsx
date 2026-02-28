@@ -83,6 +83,45 @@ export default function BetsPage() {
     const { toast } = useToast();
 
     // Data fetching
+    const parseStoredDate = (raw: unknown): Date | null => {
+        if (!raw) return null;
+        if (raw instanceof Date) return Number.isFinite(raw.getTime()) ? raw : null;
+        if (raw instanceof Timestamp) return raw.toDate();
+        if (typeof raw === 'number') {
+            const d = new Date(raw);
+            return Number.isFinite(d.getTime()) ? d : null;
+        }
+        if (typeof raw === 'string') {
+            const s = raw.trim();
+            const br = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s);
+            if (br) {
+                const day = Number(br[1]);
+                const month = Number(br[2]);
+                const year = Number(br[3]);
+                const d = new Date(year, month - 1, day);
+                return Number.isFinite(d.getTime()) ? d : null;
+            }
+            const isoDateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+            if (isoDateOnly) {
+                const year = Number(isoDateOnly[1]);
+                const month = Number(isoDateOnly[2]);
+                const day = Number(isoDateOnly[3]);
+                const d = new Date(year, month - 1, day);
+                return Number.isFinite(d.getTime()) ? d : null;
+            }
+            const d = new Date(s);
+            return Number.isFinite(d.getTime()) ? d : null;
+        }
+        if (typeof raw === 'object') {
+            const seconds = (raw as any)?.seconds;
+            if (typeof seconds === 'number') {
+                const d = new Date(seconds * 1000);
+                return Number.isFinite(d.getTime()) ? d : null;
+            }
+        }
+        return null;
+    };
+
     const fetchUserData = useCallback(async (userId: string) => {
         setIsLoading(true);
         try {
@@ -99,16 +138,14 @@ export default function BetsPage() {
             const betsData = betsSnapshot.docs.map(doc => {
                 const data = doc.data();
                 const rawDate = (data as any).date;
-                const parsedDate = rawDate instanceof Timestamp
-                    ? rawDate.toDate()
-                    : (rawDate ? new Date(rawDate) : new Date());
+                const parsedDate = parseStoredDate(rawDate) ?? new Date(0);
                 return {
                     ...data,
                     id: doc.id,
-                    date: isNaN(parsedDate.getTime()) ? new Date() : parsedDate
+                    date: parsedDate
                 } as Bet;
             }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            setBets(betsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+            setBets(betsData);
             if (lastSavedId) {
                 setLastSavedPresent(betsData.some(b => b.id === lastSavedId));
             } else {
@@ -120,10 +157,11 @@ export default function BetsPage() {
 
             const freeSpinsData = freeSpinsSnapshot.docs.map(doc => {
                 const data = doc.data() as any;
+                const parsedDate = parseStoredDate(data.date) ?? new Date(0);
                 return {
                     ...data,
                     id: doc.id,
-                    date: data.date instanceof Timestamp ? data.date.toDate() : new Date(data.date),
+                    date: parsedDate,
                 } as FreeSpin;
             });
             setFreeSpins(freeSpinsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
