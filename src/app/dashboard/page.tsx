@@ -28,6 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { SurebetCalculator } from '@/components/bets/surebet-calculator';
 import { AdvancedSurebetCalculator } from '@/components/bets/advanced-surebet-calculator';
 import { TradingCalculator } from '@/components/bets/trading-calculator';
@@ -41,6 +42,53 @@ import { BookmakerCard } from '@/components/bookmakers/bookmaker-card';
 import { BookmakerForm } from '@/components/bookmakers/bookmaker-form';
 import * as XLSX from 'xlsx';
 
+const isSurebetType = (type: Bet['type'] | string | null | undefined) => {
+    if (!type) return false;
+    if (type === 'surebet' || type === 'pa_surebet') return true;
+    if (typeof type === 'string') return type.toLowerCase().includes('surebet');
+    return false;
+};
+
+const calcBetNet = (bet: Bet) => {
+    if (bet.realizedProfit !== null && bet.realizedProfit !== undefined) return bet.realizedProfit;
+
+    if (bet.type === 'single') {
+        const stake = bet.stake ?? 0;
+        const odds = bet.odds ?? 0;
+        if (bet.status === 'won') return (stake * odds) - stake;
+        if (bet.status === 'lost') return -stake;
+        if (bet.status === 'pending') return stake * (odds - 1);
+        return 0;
+    }
+
+    if (isSurebetType(bet.type)) {
+        const combinedPaidStake = bet.subBets
+            ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+            : (bet.totalStake ?? 0);
+
+        if (bet.status === 'lost') return -combinedPaidStake;
+
+        if (bet.guaranteedProfit !== null && bet.guaranteedProfit !== undefined) {
+            if (bet.status === 'won' || bet.status === 'pending') return bet.guaranteedProfit;
+        }
+
+        if (bet.status === 'won') return (bet.guaranteedProfit ?? 0);
+        return 0;
+    }
+
+    return 0;
+};
+
+const calcBetStake = (bet: Bet) => {
+    if (bet.type === 'single') return bet.stake ?? 0;
+    if (isSurebetType(bet.type)) {
+        const combinedPaidStake = bet.subBets
+            ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
+            : (bet.totalStake ?? 0);
+        return combinedPaidStake;
+    }
+    return 0;
+};
 
 export default function BetsPage() {
     const { user, loading: authLoading } = useAuth();
@@ -76,6 +124,13 @@ export default function BetsPage() {
     const [profitFilter, setProfitFilter] = useState<string>("all");
     const [minProfit, setMinProfit] = useState<string>("");
     const [maxProfit, setMaxProfit] = useState<string>("");
+    const [statsTypeFilter, setStatsTypeFilter] = useState<string>("all");
+    const [statsStatusFilter, setStatsStatusFilter] = useState<string>("all");
+    const [statsSportFilter, setStatsSportFilter] = useState<string>("all");
+    const [statsBookmakerFilter, setStatsBookmakerFilter] = useState<string>("all");
+    const [statsRoiMin, setStatsRoiMin] = useState<string>("");
+    const [statsRoiMax, setStatsRoiMax] = useState<string>("");
+    const [statsSort, setStatsSort] = useState<string>("date_desc");
     const [showAllRaw, setShowAllRaw] = useState<boolean>(false);
     const [lastSavedId, setLastSavedId] = useState<string | null>(null);
     const [lastSavedPresent, setLastSavedPresent] = useState<boolean | null>(null);
@@ -204,34 +259,29 @@ export default function BetsPage() {
         }
     }, [user, authLoading, fetchUserData, router]);
 
-    const calcBetNet = (bet: Bet) => {
-        if (bet.realizedProfit !== null && bet.realizedProfit !== undefined) return bet.realizedProfit;
+    const betTypeLabels: Record<Bet['type'], string> = {
+        single: 'Simples',
+        surebet: 'Surebet',
+        pa_surebet: 'P.A. Surebet'
+    };
 
-        if (bet.type === 'single') {
-            const stake = bet.stake ?? 0;
-            const odds = bet.odds ?? 0;
-            if (bet.status === 'won') return (stake * odds) - stake;
-            if (bet.status === 'lost') return -stake;
-            if (bet.status === 'pending') return stake * (odds - 1);
-            return 0;
+    const getBetTypeLabel = (type: Bet['type'] | string | null | undefined) => {
+        if (!type) return '—';
+        if (type === 'single' || type === 'surebet' || type === 'pa_surebet') {
+            return betTypeLabels[type];
         }
-
-        if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
-            const combinedPaidStake = bet.subBets
-                ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
-                : (bet.totalStake ?? 0);
-
-            if (bet.status === 'lost') return -combinedPaidStake;
-
-            if (bet.guaranteedProfit !== null && bet.guaranteedProfit !== undefined) {
-                if (bet.status === 'won' || bet.status === 'pending') return bet.guaranteedProfit;
-            }
-
-            if (bet.status === 'won') return (bet.guaranteedProfit ?? 0);
-            return 0;
+        if (typeof type === 'string') {
+            if (type.toLowerCase().includes('surebet')) return 'Surebet';
         }
+        return String(type);
+    };
 
-        return 0;
+    const betStatusLabels: Record<Bet['status'], string> = {
+        pending: 'Pendente',
+        won: 'Ganha',
+        lost: 'Perdida',
+        cashed_out: 'Cash Out',
+        void: 'Anulada'
     };
     
     // Memoized calculations
@@ -655,6 +705,170 @@ export default function BetsPage() {
             finalBalance
         };
     }, [filteredBets]);
+
+    const allBetsStats = useMemo(() => {
+        const rows = bets.map(bet => {
+            const staked = calcBetStake(bet);
+            const net = calcBetNet(bet);
+            const roi = staked > 0 ? (net / staked) * 100 : 0;
+            return { bet, staked, net, roi };
+        });
+
+        const totalStaked = rows.reduce((sum, row) => sum + row.staked, 0);
+        const totalNet = rows.reduce((sum, row) => sum + row.net, 0);
+        const totalProfit = rows.reduce((sum, row) => sum + (row.net > 0 ? row.net : 0), 0);
+        const totalLoss = rows.reduce((sum, row) => sum + (row.net < 0 ? -row.net : 0), 0);
+        const profitPercent = totalStaked > 0 ? (totalProfit / totalStaked) * 100 : 0;
+        const lossPercent = totalStaked > 0 ? (totalLoss / totalStaked) * 100 : 0;
+        const positiveCount = rows.filter(row => row.net > 0).length;
+        const negativeCount = rows.filter(row => row.net < 0).length;
+        const negativeRoiProfitCount = rows.filter(row => row.roi < 0 && row.net > 0).length;
+        const negativeRoiProfitRate = rows.length > 0 ? (negativeRoiProfitCount / rows.length) * 100 : 0;
+
+        const bucketDefs = [
+            { key: 'lt-10', label: '≤ -10%', min: -Infinity, max: -10 },
+            { key: 'btw-10-5', label: '-10% a -5%', min: -10, max: -5 },
+            { key: 'btw-5-0', label: '-5% a 0%', min: -5, max: 0 },
+            { key: 'btw-0-5', label: '0% a 5%', min: 0, max: 5 },
+            { key: 'btw-5-10', label: '5% a 10%', min: 5, max: 10 },
+            { key: 'gt-10', label: '> 10%', min: 10, max: Infinity },
+        ];
+
+        const roiBuckets = bucketDefs.map(bucket => {
+            const count = rows.filter(row => {
+                if (bucket.max === Infinity) return row.roi >= bucket.min;
+                if (bucket.min === -Infinity) return row.roi <= bucket.max;
+                return row.roi >= bucket.min && row.roi < bucket.max;
+            }).length;
+            const percent = rows.length > 0 ? (count / rows.length) * 100 : 0;
+            return { ...bucket, count, percent };
+        });
+
+        return {
+            rows,
+            totalStaked,
+            totalNet,
+            totalProfit,
+            totalLoss,
+            profitPercent,
+            lossPercent,
+            positiveCount,
+            negativeCount,
+            negativeRoiProfitCount,
+            negativeRoiProfitRate,
+            roiBuckets
+        };
+    }, [bets]);
+
+    const statsOptions = useMemo(() => {
+        const sports = Array.from(new Set(bets.map(b => b.sport).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+        const bookmakerSet = new Set<string>();
+        for (const bet of bets) {
+            if (bet.bookmaker) bookmakerSet.add(bet.bookmaker);
+            for (const sb of bet.subBets ?? []) {
+                if (sb.bookmaker) bookmakerSet.add(sb.bookmaker);
+            }
+        }
+        const bookmakersList = Array.from(bookmakerSet).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+        return { sports, bookmakers: bookmakersList };
+    }, [bets]);
+
+    const statsRowsFiltered = useMemo(() => {
+        const normalizedType = (value: string) => value.trim().toLowerCase();
+        let rows = allBetsStats.rows.slice();
+
+        if (statsTypeFilter !== 'all') {
+            rows = rows.filter(({ bet }) => {
+                const t = normalizedType(String(bet.type ?? ''));
+                return t === normalizedType(statsTypeFilter);
+            });
+        }
+
+        if (statsStatusFilter !== 'all') {
+            rows = rows.filter(({ bet }) => bet.status === statsStatusFilter);
+        }
+
+        if (statsSportFilter !== 'all') {
+            rows = rows.filter(({ bet }) => bet.sport === statsSportFilter);
+        }
+
+        if (statsBookmakerFilter !== 'all') {
+            rows = rows.filter(({ bet }) => {
+                if (bet.type === 'single') return bet.bookmaker === statsBookmakerFilter;
+                return (bet.subBets ?? []).some(sb => sb.bookmaker === statsBookmakerFilter);
+            });
+        }
+
+        const roiMin = statsRoiMin ? Number(statsRoiMin) : undefined;
+        const roiMax = statsRoiMax ? Number(statsRoiMax) : undefined;
+        if (roiMin !== undefined && !Number.isNaN(roiMin)) {
+            rows = rows.filter(({ roi }) => roi >= roiMin);
+        }
+        if (roiMax !== undefined && !Number.isNaN(roiMax)) {
+            rows = rows.filter(({ roi }) => roi <= roiMax);
+        }
+
+        const sorters: Record<string, (a: typeof rows[number], b: typeof rows[number]) => number> = {
+            date_desc: (a, b) => new Date(b.bet.date).getTime() - new Date(a.bet.date).getTime(),
+            date_asc: (a, b) => new Date(a.bet.date).getTime() - new Date(b.bet.date).getTime(),
+            roi_desc: (a, b) => b.roi - a.roi,
+            roi_asc: (a, b) => a.roi - b.roi,
+            net_desc: (a, b) => b.net - a.net,
+            net_asc: (a, b) => a.net - b.net,
+            stake_desc: (a, b) => b.staked - a.staked,
+            stake_asc: (a, b) => a.staked - b.staked,
+        };
+
+        rows.sort(sorters[statsSort] ?? sorters.date_desc);
+        return rows;
+    }, [allBetsStats.rows, statsTypeFilter, statsStatusFilter, statsSportFilter, statsBookmakerFilter, statsRoiMin, statsRoiMax, statsSort]);
+
+    const statsSummary = useMemo(() => {
+        const rows = statsRowsFiltered;
+        const totalStaked = rows.reduce((sum, row) => sum + row.staked, 0);
+        const totalNet = rows.reduce((sum, row) => sum + row.net, 0);
+        const totalProfit = rows.reduce((sum, row) => sum + (row.net > 0 ? row.net : 0), 0);
+        const totalLoss = rows.reduce((sum, row) => sum + (row.net < 0 ? -row.net : 0), 0);
+        const profitPercent = totalStaked > 0 ? (totalProfit / totalStaked) * 100 : 0;
+        const lossPercent = totalStaked > 0 ? (totalLoss / totalStaked) * 100 : 0;
+        const positiveCount = rows.filter(row => row.net > 0).length;
+        const negativeCount = rows.filter(row => row.net < 0).length;
+        const negativeRoiProfitCount = rows.filter(row => row.roi < 0 && row.net > 0).length;
+        const negativeRoiProfitRate = rows.length > 0 ? (negativeRoiProfitCount / rows.length) * 100 : 0;
+
+        const bucketDefs = [
+            { key: 'lt-10', label: '≤ -10%', min: -Infinity, max: -10 },
+            { key: 'btw-10-5', label: '-10% a -5%', min: -10, max: -5 },
+            { key: 'btw-5-0', label: '-5% a 0%', min: -5, max: 0 },
+            { key: 'btw-0-5', label: '0% a 5%', min: 0, max: 5 },
+            { key: 'btw-5-10', label: '5% a 10%', min: 5, max: 10 },
+            { key: 'gt-10', label: '> 10%', min: 10, max: Infinity },
+        ];
+
+        const roiBuckets = bucketDefs.map(bucket => {
+            const count = rows.filter(row => {
+                if (bucket.max === Infinity) return row.roi >= bucket.min;
+                if (bucket.min === -Infinity) return row.roi <= bucket.max;
+                return row.roi >= bucket.min && row.roi < bucket.max;
+            }).length;
+            const percent = rows.length > 0 ? (count / rows.length) * 100 : 0;
+            return { ...bucket, count, percent };
+        });
+
+        return {
+            totalStaked,
+            totalNet,
+            totalProfit,
+            totalLoss,
+            profitPercent,
+            lossPercent,
+            positiveCount,
+            negativeCount,
+            negativeRoiProfitCount,
+            negativeRoiProfitRate,
+            roiBuckets
+        };
+    }, [statsRowsFiltered]);
 
     const cpfStats = useMemo(() => {
         const ensureBucket = (byCpf: Record<string, { key: string; cpf: string; accountName: string; profit: number; betsCount: number }>, rawCpf: string, rawAccountName: string) => {
@@ -1882,26 +2096,249 @@ export default function BetsPage() {
                 </div>
              </div>
 
-             <h3 className="text-2xl font-bold mb-4">Minhas Apostas</h3>
-            {lastSavedId && (
-                <div className="mb-4 text-xs text-muted-foreground">
-                    Última aposta salva: <span className="font-mono">{lastSavedId}</span> — {lastSavedPresent == null ? 'verificando...' : lastSavedPresent ? 'encontrada' : 'não encontrada'}
-                </div>
-            )}
-            <Tabs value={filterStatus} onValueChange={setFilterStatus} className="w-full">
+            <Tabs defaultValue="bets" className="w-full">
                 <TabsList className="w-full mb-6 overflow-x-auto whitespace-nowrap flex gap-2">
-                    <TabsTrigger value="all">Todas</TabsTrigger>
-                    <TabsTrigger value="pending">Em Andamento</TabsTrigger>
-                    <TabsTrigger value="won">Ganhos</TabsTrigger>
-                    <TabsTrigger value="lost">Perdidas</TabsTrigger>
-                    <TabsTrigger value="other">Outras</TabsTrigger>
+                    <TabsTrigger value="bets">Minhas Apostas</TabsTrigger>
+                    <TabsTrigger value="stats">Estatísticas</TabsTrigger>
                 </TabsList>
-                
-                <TabsContent value="all">{renderBetList()}</TabsContent>
-                <TabsContent value="pending">{renderBetList()}</TabsContent>
-                <TabsContent value="won">{renderBetList()}</TabsContent>
-                <TabsContent value="lost">{renderBetList()}</TabsContent>
-                <TabsContent value="other">{renderBetList()}</TabsContent>
+
+                <TabsContent value="bets">
+                    <h3 className="text-2xl font-bold mb-4">Minhas Apostas</h3>
+                    {lastSavedId && (
+                        <div className="mb-4 text-xs text-muted-foreground">
+                            Última aposta salva: <span className="font-mono">{lastSavedId}</span> — {lastSavedPresent == null ? 'verificando...' : lastSavedPresent ? 'encontrada' : 'não encontrada'}
+                        </div>
+                    )}
+                    <Tabs value={filterStatus} onValueChange={setFilterStatus} className="w-full">
+                        <TabsList className="w-full mb-6 overflow-x-auto whitespace-nowrap flex gap-2">
+                            <TabsTrigger value="all">Todas</TabsTrigger>
+                            <TabsTrigger value="pending">Em Andamento</TabsTrigger>
+                            <TabsTrigger value="won">Ganhos</TabsTrigger>
+                            <TabsTrigger value="lost">Perdidas</TabsTrigger>
+                            <TabsTrigger value="other">Outras</TabsTrigger>
+                        </TabsList>
+                        
+                        <TabsContent value="all">{renderBetList()}</TabsContent>
+                        <TabsContent value="pending">{renderBetList()}</TabsContent>
+                        <TabsContent value="won">{renderBetList()}</TabsContent>
+                        <TabsContent value="lost">{renderBetList()}</TabsContent>
+                        <TabsContent value="other">{renderBetList()}</TabsContent>
+                    </Tabs>
+                </TabsContent>
+
+                <TabsContent value="stats">
+                    <h3 className="text-2xl font-bold mb-4">Estatísticas das Apostas</h3>
+                    <Card className="mb-6">
+                        <CardHeader>
+                            <CardTitle>Filtros e Ordenação</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Tipo</Label>
+                                    <Select value={statsTypeFilter} onValueChange={setStatsTypeFilter}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Selecione o tipo" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Todos</SelectItem>
+                                            <SelectItem value="single">Simples</SelectItem>
+                                            <SelectItem value="surebet">Surebet</SelectItem>
+                                            <SelectItem value="pa_surebet">P.A. Surebet</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>Status</Label>
+                                    <Select value={statsStatusFilter} onValueChange={setStatsStatusFilter}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Selecione o status" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Todos</SelectItem>
+                                            <SelectItem value="pending">Pendente</SelectItem>
+                                            <SelectItem value="won">Ganha</SelectItem>
+                                            <SelectItem value="lost">Perdida</SelectItem>
+                                            <SelectItem value="cashed_out">Cash Out</SelectItem>
+                                            <SelectItem value="void">Anulada</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>Esporte</Label>
+                                    <Select value={statsSportFilter} onValueChange={setStatsSportFilter}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Selecione o esporte" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Todos</SelectItem>
+                                            {statsOptions.sports.map(sport => (
+                                                <SelectItem key={sport} value={sport}>{sport}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>Casa</Label>
+                                    <Select value={statsBookmakerFilter} onValueChange={setStatsBookmakerFilter}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Selecione a casa" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Todas</SelectItem>
+                                            {statsOptions.bookmakers.map(bk => (
+                                                <SelectItem key={bk} value={bk}>{bk}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>ROI mínimo (%)</Label>
+                                    <Input
+                                        type="number"
+                                        step="0.1"
+                                        value={statsRoiMin}
+                                        onChange={(e) => setStatsRoiMin(e.target.value)}
+                                        placeholder="-5"
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>ROI máximo (%)</Label>
+                                    <Input
+                                        type="number"
+                                        step="0.1"
+                                        value={statsRoiMax}
+                                        onChange={(e) => setStatsRoiMax(e.target.value)}
+                                        placeholder="10"
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>Ordenar por</Label>
+                                    <Select value={statsSort} onValueChange={setStatsSort}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Selecione a ordenação" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="date_desc">Data (mais recente)</SelectItem>
+                                            <SelectItem value="date_asc">Data (mais antiga)</SelectItem>
+                                            <SelectItem value="roi_desc">ROI (maior)</SelectItem>
+                                            <SelectItem value="roi_asc">ROI (menor)</SelectItem>
+                                            <SelectItem value="net_desc">Lucro (maior)</SelectItem>
+                                            <SelectItem value="net_asc">Lucro (menor)</SelectItem>
+                                            <SelectItem value="stake_desc">Stake (maior)</SelectItem>
+                                            <SelectItem value="stake_asc">Stake (menor)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mt-4">
+                                <div className="text-xs text-muted-foreground">
+                                    {statsRowsFiltered.length} apostas filtradas
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        setStatsTypeFilter('all');
+                                        setStatsStatusFilter('all');
+                                        setStatsSportFilter('all');
+                                        setStatsBookmakerFilter('all');
+                                        setStatsRoiMin('');
+                                        setStatsRoiMax('');
+                                        setStatsSort('date_desc');
+                                    }}
+                                >
+                                    Limpar filtros da aba
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <SummaryCard title="Total Apostado" value={statsSummary.totalStaked} icon={Wallet} isCurrency />
+                        <SummaryCard title="Saldo Final" value={statsSummary.totalNet} icon={Calculator} isCurrency valueClassName={statsSummary.totalNet >= 0 ? "text-green-500" : "text-destructive"} />
+                        <SummaryCard title="Lucro Total" value={statsSummary.totalProfit} icon={TrendingUp} isCurrency valueClassName={statsSummary.totalProfit >= 0 ? "text-green-500" : "text-destructive"} />
+                        <SummaryCard title="Perdas Totais" value={statsSummary.totalLoss} icon={TrendingDown} isCurrency valueClassName={statsSummary.totalLoss > 0 ? "text-destructive" : ""} />
+                        <SummaryCard title="Lucro %" value={statsSummary.profitPercent} icon={TrendingUp} isPercentage valueClassName={statsSummary.profitPercent >= 0 ? "text-green-500" : "text-destructive"} />
+                        <SummaryCard title="Perda %" value={statsSummary.lossPercent} icon={TrendingDown} isPercentage valueClassName={statsSummary.lossPercent > 0 ? "text-destructive" : ""} />
+                        <SummaryCard title="Positivas/Negativas" value={`${statsSummary.positiveCount}/${statsSummary.negativeCount}`} icon={BarChart} />
+                        <SummaryCard title="ROI Negativo com Lucro" value={`${statsSummary.negativeRoiProfitCount} (${statsSummary.negativeRoiProfitRate.toFixed(1)}%)`} icon={AlertTriangle} />
+                    </div>
+
+                    <Card className="mb-6">
+                        <CardHeader>
+                            <CardTitle>Distribuição por ROI</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {statsSummary.roiBuckets.map(bucket => (
+                                    <div key={bucket.key} className="flex items-center justify-between rounded-md border p-3">
+                                        <div className="text-sm font-medium">{bucket.label}</div>
+                                        <div className="text-sm text-muted-foreground">
+                                            {bucket.count} ({bucket.percent.toFixed(1)}%)
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Todos os Jogos Apostados</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Data</TableHead>
+                                        <TableHead>Evento</TableHead>
+                                        <TableHead className="hidden md:table-cell">Tipo</TableHead>
+                                        <TableHead className="hidden lg:table-cell">Status</TableHead>
+                                        <TableHead className="text-right">Stake</TableHead>
+                                        <TableHead className="text-right">Lucro/Prejuízo</TableHead>
+                                        <TableHead className="text-right">ROI</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {statsRowsFiltered.length > 0 ? (
+                                        statsRowsFiltered.map(({ bet, staked, net, roi }) => (
+                                            <TableRow key={bet.id}>
+                                                <TableCell>{format(new Date(bet.date), 'dd/MM/yyyy')}</TableCell>
+                                                <TableCell>
+                                                    <div className="font-medium">{bet.event}</div>
+                                                    <div className="text-xs text-muted-foreground">{bet.betType ?? '—'}</div>
+                                                </TableCell>
+                                                <TableCell className="hidden md:table-cell">{getBetTypeLabel(bet.type)}</TableCell>
+                                                <TableCell className="hidden lg:table-cell">{betStatusLabels[bet.status]}</TableCell>
+                                                <TableCell className="text-right">
+                                                    {staked.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                </TableCell>
+                                                <TableCell className={`text-right ${net >= 0 ? "text-green-500" : "text-destructive"}`}>
+                                                    {net.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                </TableCell>
+                                                <TableCell className={`text-right ${roi >= 0 ? "text-green-500" : "text-destructive"}`}>
+                                                    {roi.toFixed(2)}%
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={7} className="text-center text-muted-foreground">
+                                                Nenhuma aposta cadastrada.
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
             </Tabs>
 
             {/* Bet Form Dialog */}
