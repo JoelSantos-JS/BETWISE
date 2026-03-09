@@ -156,6 +156,8 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
   const [freeSpinsCount, setFreeSpinsCount] = useState<number>(0);
   const [freeSpinsEarned, setFreeSpinsEarned] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<string>(betToEdit ? (betToEdit.type || 'single') : 'single');
+  const [applyGainDiscount, setApplyGainDiscount] = useState(false);
+  const [applyGainDiscountResolution, setApplyGainDiscountResolution] = useState(false);
   const { addFreeSpin, addAccount, accounts } = useBets();
   const { toast } = useToast();
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
@@ -230,6 +232,15 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
   const watchedStatus = watch("status");
   const watchedSubBets = watch("subBets");
   const watchedOutcomeScenario = watch("outcomeScenario");
+  const watchedStake = watch("stake");
+  const watchedOdds = watch("odds");
+  const watchedRealizedProfit = watch("realizedProfit");
+  const discountedProfitPreview = React.useMemo(() => {
+    const stake = Number(watchedStake ?? 0);
+    const odds = Number(watchedOdds ?? 0);
+    const grossProfit = Math.max(stake * (odds - 1), 0);
+    return Math.round(grossProfit * 0.955 * 100) / 100;
+  }, [watchedStake, watchedOdds]);
   
   useEffect(() => {
     setActiveTab(watchedType);
@@ -332,6 +343,12 @@ useEffect(() => {
         finalData.totalStake = totalStake;
         finalData.guaranteedProfit = guaranteedProfit;
         finalData.profitPercentage = profitPercentage;
+    }
+    if (applyGainDiscount && finalData.type === 'single' && finalData.status === 'won') {
+        const stake = finalData.stake ?? 0;
+        const odds = finalData.odds ?? 0;
+        const grossProfit = Math.max(stake * (odds - 1), 0);
+        finalData.realizedProfit = Math.round(grossProfit * 0.955 * 100) / 100;
     }
     
     if(!finalData.earnedFreebetValue) {
@@ -511,6 +528,15 @@ useEffect(() => {
                                     <FormMessage />
                                 </FormItem>
                             )} />
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <Checkbox checked={applyGainDiscount} onCheckedChange={(checked) => setApplyGainDiscount(!!checked)} />
+                                <span className="text-sm">Aplicar desconto de 4,5% nos ganhos</span>
+                              </div>
+                              {applyGainDiscount && (
+                                <div className="text-xs text-muted-foreground">Ganho líquido estimado: R$ {discountedProfitPreview.toFixed(2)}</div>
+                              )}
+                            </div>
                         </TabsContent>
 
                         <TabsContent value="free_spins" className="space-y-4 mt-4">
@@ -941,13 +967,41 @@ useEffect(() => {
                                             inputMode="decimal"
                                             step="0.01"
                                             value={field.value ?? ''}
-                                            onChange={(e) => field.onChange(e.target.value === '' ? null : Number(e.target.value))}
+                                            onChange={(e) => {
+                                              const raw = e.target.value === '' ? null : Number(e.target.value);
+                                              if (raw === null) {
+                                                field.onChange(null);
+                                                return;
+                                              }
+                                              if (applyGainDiscountResolution) {
+                                                const discounted = Math.round(raw * 0.955 * 100) / 100;
+                                                field.onChange(discounted);
+                                              } else {
+                                                field.onChange(raw);
+                                              }
+                                            }}
                                             placeholder="Lucro real calculado ou manual"
                                         />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
                             )} />
+                            <div className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <Checkbox
+                                  checked={applyGainDiscountResolution}
+                                  onCheckedChange={(checked) => {
+                                    const isChecked = !!checked;
+                                    setApplyGainDiscountResolution(isChecked);
+                                    if (isChecked && watchedRealizedProfit !== null && watchedRealizedProfit !== undefined) {
+                                      const discounted = Math.round(Number(watchedRealizedProfit) * 0.955 * 100) / 100;
+                                      setValue('realizedProfit', discounted);
+                                    }
+                                  }}
+                                />
+                                <span className="text-sm">Aplicar desconto de 4,5% nos ganhos</span>
+                              </div>
+                            </div>
                         </div>
                     )}
 

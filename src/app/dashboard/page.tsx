@@ -90,6 +90,33 @@ const calcBetStake = (bet: Bet) => {
     return 0;
 };
 
+const ORIGINAL_BOOKMAKERS: Array<{ name: string; initialBankroll: number }> = [
+    { name: 'BETANO', initialBankroll: 2780.00 },
+    { name: 'SUPERBET', initialBankroll: 1070.00 },
+    { name: 'BET365 CONTA1', initialBankroll: 4708.00 },
+    { name: 'BET365 CONTA2', initialBankroll: 2072.00 },
+    { name: 'BET365 CONTA3', initialBankroll: 1863.00 },
+    { name: 'SPORTINGBET CONTA1', initialBankroll: 3410.00 },
+    { name: 'SPORTINGBET CONTA2', initialBankroll: 3554.00 },
+    { name: 'ESTRELABET', initialBankroll: 1251.00 },
+    { name: 'JOGO DE OURO', initialBankroll: 20.00 },
+    { name: 'BETESPORTE (1)', initialBankroll: 241.50 },
+    { name: 'BETESPORTE (2)', initialBankroll: 354.00 },
+    { name: 'TIVOBET', initialBankroll: 81.67 },
+    { name: 'VIVA SORTE', initialBankroll: 100.00 },
+    { name: '7GAMES', initialBankroll: 108.12 },
+    { name: 'BETÃO', initialBankroll: 73.65 },
+    { name: 'EXCHANGE', initialBankroll: 61.50 },
+    { name: 'EXCHANGE2', initialBankroll: 37.00 },
+    { name: 'BETNACIONAL', initialBankroll: 48.66 },
+    { name: 'PINNACLE', initialBankroll: 395.00 },
+    { name: 'VUPI', initialBankroll: 38.19 },
+    { name: 'SPORTY', initialBankroll: 363.00 },
+    { name: '9D', initialBankroll: 95.00 },
+    { name: 'BET', initialBankroll: 3200.00 },
+    { name: 'BETDA SORTE', initialBankroll: 12.81 },
+];
+
 export default function BetsPage() {
     const { user, loading: authLoading } = useAuth();
     const router = useRouter();
@@ -108,6 +135,8 @@ export default function BetsPage() {
     const [isBookmakerFormOpen, setIsBookmakerFormOpen] = useState(false);
     const [bookmakerToEdit, setBookmakerToEdit] = useState<BookmakerType | null>(null);
     const [bookmakerToDelete, setBookmakerToDelete] = useState<BookmakerType | null>(null);
+    const [isRecreateBookmakersOpen, setIsRecreateBookmakersOpen] = useState(false);
+    const [isRecreatingBookmakers, setIsRecreatingBookmakers] = useState(false);
     // Totais: override e diálogo
     const [isTotalsDialogOpen, setIsTotalsDialogOpen] = useState(false);
     const [totalsOverride, setTotalsOverride] = useState<{ initial?: number; current?: number } | null>(null);
@@ -1415,6 +1444,54 @@ export default function BetsPage() {
             setBookmakerToDelete(null);
         }
     };
+
+    const handleRecreateBookmakers = async () => {
+        if (!user) { toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado.' }); return; }
+        setIsRecreatingBookmakers(true);
+        try {
+            const bookmakersCollectionRef = collection(db, 'users', user.uid, 'bookmakers');
+            const existingSnapshot = await getDocs(bookmakersCollectionRef);
+            const MAX_BATCH = 450;
+            let batch = writeBatch(db);
+            let ops = 0;
+
+            for (const docSnap of existingSnapshot.docs) {
+                batch.delete(docSnap.ref);
+                ops += 1;
+                if (ops >= MAX_BATCH) {
+                    await batch.commit();
+                    batch = writeBatch(db);
+                    ops = 0;
+                }
+            }
+
+            for (const item of ORIGINAL_BOOKMAKERS) {
+                const newRef = doc(bookmakersCollectionRef);
+                batch.set(newRef, {
+                    name: item.name,
+                    initialBankroll: item.initialBankroll,
+                });
+                ops += 1;
+                if (ops >= MAX_BATCH) {
+                    await batch.commit();
+                    batch = writeBatch(db);
+                    ops = 0;
+                }
+            }
+
+            if (ops > 0) {
+                await batch.commit();
+            }
+            await fetchUserData(user.uid);
+            toast({ title: 'Casas recriadas', description: 'As casas foram restauradas com os valores originais.' });
+        } catch (error) {
+            console.error('Error recreating bookmakers:', error);
+            toast({ variant: 'destructive', title: 'Erro ao recriar casas', description: 'Não foi possível restaurar as casas no banco de dados.' });
+        } finally {
+            setIsRecreatingBookmakers(false);
+            setIsRecreateBookmakersOpen(false);
+        }
+    };
     
     // Export handler
     const handleExport = () => {
@@ -1666,9 +1743,15 @@ export default function BetsPage() {
                         <Building className="w-7 h-7 text-primary" />
                         Bancas por Casa
                      </h3>
-                      <Button onClick={() => handleOpenBookmakerForm()} variant="outline">
-                        <PlusCircle className="mr-2"/> Adicionar Casa
-                    </Button>
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <Button onClick={() => setIsRecreateBookmakersOpen(true)} variant="destructive">
+                            {isRecreatingBookmakers ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            Recriar Casas
+                        </Button>
+                        <Button onClick={() => handleOpenBookmakerForm()} variant="outline">
+                            <PlusCircle className="mr-2"/> Adicionar Casa
+                        </Button>
+                    </div>
                 </div>
                 {bookmakers.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -2418,6 +2501,25 @@ export default function BetsPage() {
                     </CardContent>
                 </DialogContent>
             </Dialog>
+
+            <AlertDialog open={isRecreateBookmakersOpen} onOpenChange={setIsRecreateBookmakersOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            <div className="flex items-center gap-2"> <AlertTriangle className="text-destructive" /> Recriar todas as casas? </div>
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Essa ação apaga todas as casas e recria com a lista original. As apostas não serão alteradas.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isRecreatingBookmakers}>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleRecreateBookmakers} disabled={isRecreatingBookmakers}>
+                            {isRecreatingBookmakers ? 'Recriando...' : 'Sim, recriar casas'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {/* Delete Bookmaker Dialog */}
              <AlertDialog open={!!bookmakerToDelete} onOpenChange={(isOpen) => !isOpen && setBookmakerToDelete(null)}>

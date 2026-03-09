@@ -33,6 +33,7 @@ import { SPORTS } from '@/lib/data';
 import type { Bet } from '@/lib/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { FreeSpin } from '@/lib/types';
+import { Checkbox } from '@/components/ui/checkbox';
  
 
 const formSchema = z.object({
@@ -77,6 +78,7 @@ export function AddBetForm() {
   const { toast } = useToast();
 
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [applyGainDiscount, setApplyGainDiscount] = useState(false);
 
   const accountOptions = useMemo(() => {
     return (accounts ?? []).slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
@@ -109,6 +111,14 @@ export function AddBetForm() {
       cashbackMode: 'percent',
     },
   });
+  const watchedStake = form.watch('stake');
+  const watchedOdds = form.watch('odds');
+  const discountedProfitPreview = useMemo(() => {
+    const stake = Number(watchedStake ?? 0);
+    const odds = Number(watchedOdds ?? 0);
+    const grossProfit = Math.max(stake * (odds - 1), 0);
+    return Math.round(grossProfit * 0.955 * 100) / 100;
+  }, [watchedStake, watchedOdds]);
 
   const normalizeCpf = (cpf: string) => cpf.replace(/\D/g, '');
 
@@ -161,6 +171,10 @@ export function AddBetForm() {
       cashbackValue: values.cashbackValue ?? 0,
       cashbackMode: values.cashbackMode ?? 'percent',
     };
+    if (applyGainDiscount && values.status === 'won') {
+      const grossProfit = Math.max(values.stake * (values.odds - 1), 0);
+      newBet.realizedProfit = Math.round(grossProfit * 0.955 * 100) / 100;
+    }
     addBet(newBet);
     toast({
         title: "Bet added!",
@@ -478,6 +492,15 @@ export function AddBetForm() {
               })()}
             </div>
           </div>
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Checkbox checked={applyGainDiscount} onCheckedChange={(checked) => setApplyGainDiscount(!!checked)} />
+            <span className="text-sm">Aplicar desconto de 4,5% nos ganhos</span>
+          </div>
+          {applyGainDiscount && (
+            <div className="text-xs text-muted-foreground">Ganho líquido estimado: R$ {discountedProfitPreview.toFixed(2)}</div>
+          )}
         </div>
 
         <Button type="submit" size="lg" className="w-full md:w-auto">
