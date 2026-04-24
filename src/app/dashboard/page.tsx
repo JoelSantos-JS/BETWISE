@@ -41,6 +41,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { BookmakerCard } from '@/components/bookmakers/bookmaker-card';
 import { BookmakerForm } from '@/components/bookmakers/bookmaker-form';
 import * as XLSX from 'xlsx';
+import { calculateSurebet } from '@/lib/surebet-calculator';
 
 const isSurebetType = (type: Bet['type'] | string | null | undefined) => {
     if (!type) return false;
@@ -62,17 +63,16 @@ const calcBetNet = (bet: Bet) => {
     }
 
     if (isSurebetType(bet.type)) {
-        const combinedPaidStake = bet.subBets
+        // Recalculate using the new cashback-corrected logic
+        const recalculated = bet.subBets ? calculateSurebet(bet.subBets) : null;
+        const guaranteedProfit = recalculated?.guaranteedProfit ?? bet.guaranteedProfit ?? 0;
+        const combinedPaidStake = recalculated?.totalStake ?? (bet.subBets
             ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
-            : (bet.totalStake ?? 0);
+            : (bet.totalStake ?? 0));
 
         if (bet.status === 'lost') return -combinedPaidStake;
 
-        if (bet.guaranteedProfit !== null && bet.guaranteedProfit !== undefined) {
-            if (bet.status === 'won' || bet.status === 'pending') return bet.guaranteedProfit;
-        }
-
-        if (bet.status === 'won') return (bet.guaranteedProfit ?? 0);
+        if (bet.status === 'won' || bet.status === 'pending') return guaranteedProfit;
         return 0;
     }
 
@@ -82,9 +82,11 @@ const calcBetNet = (bet: Bet) => {
 const calcBetStake = (bet: Bet) => {
     if (bet.type === 'single') return bet.stake ?? 0;
     if (isSurebetType(bet.type)) {
-        const combinedPaidStake = bet.subBets
+        // Use recalculated stake to ensure consistency
+        const recalculated = bet.subBets ? calculateSurebet(bet.subBets) : null;
+        const combinedPaidStake = recalculated?.totalStake ?? (bet.subBets
             ? (bet.subBets.reduce((s, sb) => s + ((sb.isFreebet ? 0 : (sb.stake ?? 0))), 0) ?? 0)
-            : (bet.totalStake ?? 0);
+            : (bet.totalStake ?? 0));
         return combinedPaidStake;
     }
     return 0;
@@ -321,28 +323,8 @@ export default function BetsPage() {
             // Ignorar pendentes e anuladas; considerar cashout via realizedProfit
             if (bet.status === 'pending' || bet.status === 'void') return acc;
 
-            // Se houver realizedProfit, sempre priorizar (cobre cashout e ajustes manuais)
-            if (bet.realizedProfit !== null && bet.realizedProfit !== undefined) {
-                return acc + bet.realizedProfit;
-            }
-
-            if (bet.type === 'single') {
-                const stake = bet.stake ?? 0;
-                const odds = bet.odds ?? 0;
-                if (bet.status === 'won') return acc + (stake * odds) - stake;
-                if (bet.status === 'lost') return acc - stake;
-                // cash out sem realizedProfit explícito não altera lucro
-                return acc;
-            } else if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
-                if (bet.status === 'won') {
-                    const profitToUse = bet.guaranteedProfit ?? 0;
-                    return acc + profitToUse;
-                }
-                if (bet.status === 'lost') return acc - (bet.totalStake ?? 0);
-                // cash out sem realizedProfit explícito não altera lucro
-                return acc;
-            }
-            return acc;
+            // Use recalculated values for all bets
+            return acc + calcBetNet(bet);
         }, 0);
 
         const freeSpinsProfit = freeSpins.reduce((acc, fs) => acc + (fs.wonAmount ?? 0), 0);
