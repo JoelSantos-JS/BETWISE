@@ -122,32 +122,51 @@ const calculateSurebet = (subBets: Array<{ stake?: number; odds?: number; isFree
     if (totalStake <= 0 && !subBets.some(b => b.isFreebet)) {
         return { totalStake, guaranteedProfit: 0, profitPercentage: 0 };
     }
-    
-    // 2. Retornos Potenciais: Calcula o retorno líquido de cada "perna" da aposta.
-    const totalCashback = subBets.reduce((acc, bet) => {
-      const stake = bet.stake || 0;
-      const v = bet.cashbackValue ?? 0;
-      const m = bet.cashbackMode ?? 'percent';
-      const cb = m === 'percent' ? stake * (v / 100) : v;
-      return acc + cb;
-    }, 0);
 
-    const potentialReturns = subBets.map(bet => {
-        const stake = bet.stake || 0;
-        const odds = bet.odds || 0;
-        
-        const grossReturn = bet.isFreebet ? stake * (odds - 1) : stake * odds;
-        
-        return grossReturn + totalCashback - totalStake;
+    // 2. Calcula para cada cenário: qual é o retorno se a aposta i vencer?
+    // Cashback é recebido APENAS nas apostas que perdem (não na vencedora)
+    const potentialReturnsWithCashback = subBets.map((winBet, winIndex) => {
+        const winStake = winBet.stake || 0;
+        const winOdds = winBet.odds || 0;
+
+        // Retorno bruto da aposta vencedora
+        const grossReturn = winBet.isFreebet ? winStake * (winOdds - 1) : winStake * winOdds;
+
+        // Calcula cashback apenas das apostas que PERDEM (todas exceto winIndex)
+        const cashbackFromLosers = subBets.reduce((acc, loseBet, loseIndex) => {
+          if (loseIndex === winIndex) return acc; // aposta vencedora não recebe cashback
+
+          const loseStake = loseBet.stake || 0;
+          const cashbackValue = loseBet.cashbackValue ?? 0;
+          const cashbackMode = loseBet.cashbackMode ?? 'percent';
+          const cashback = cashbackMode === 'percent'
+            ? loseStake * (cashbackValue / 100)
+            : cashbackValue;
+
+          return acc + cashback;
+        }, 0);
+
+        // Resultado do cenário: retorno da vencedora - stake total + cashback das perdedoras
+        return {
+          profit: grossReturn - totalStake + cashbackFromLosers,
+          cashback: cashbackFromLosers
+        };
     });
 
-    // 3. Lucro Garantido: É o pior cenário entre todos os retornos líquidos.
-    const guaranteedProfit = Math.min(...potentialReturns);
-    
+    // 3. Lucro Garantido: É o pior cenário entre todos os retornos.
+    const scenarioWithWorstProfit = potentialReturnsWithCashback.reduce((worst, current) =>
+      current.profit < worst.profit ? current : worst
+    );
+    const guaranteedProfit = scenarioWithWorstProfit.profit;
+    const minCashback = scenarioWithWorstProfit.cashback;
+
+    // Cashback máximo (melhor cenário)
+    const maxCashback = Math.max(...potentialReturnsWithCashback.map(s => s.cashback));
+
     // 4. Retorno Percentual (ROI)
     const profitPercentage = totalStake > 0 ? (guaranteedProfit / totalStake) * 100 : Infinity;
-  
-    return { totalStake, guaranteedProfit, profitPercentage };
+
+    return { totalStake, guaranteedProfit, profitPercentage, minCashback, maxCashback };
 };
 
 export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProps) {
@@ -1034,6 +1053,17 @@ useEffect(() => {
                                 {isFinite(surebetCalculations.profitPercentage) ? `${surebetCalculations.profitPercentage.toFixed(2)}%` : 'N/A'}
                             </p>
                         </div>
+                        {(surebetCalculations.minCashback || 0) > 0 && (
+                          <div className="pl-2 border-l border-muted">
+                            <span className="text-muted-foreground">Cashback Extraível:</span>
+                            <p className="font-bold text-purple-500">
+                              {surebetCalculations.minCashback === surebetCalculations.maxCashback
+                                ? surebetCalculations.minCashback.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                                : `${surebetCalculations.minCashback.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} ~ ${surebetCalculations.maxCashback.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+                              }
+                            </p>
+                          </div>
+                        )}
                     </div>
                  )}
                 <div className="flex gap-2 ml-auto w-full sm:w-auto">
