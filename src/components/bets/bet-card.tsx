@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+import { calculateSurebet } from '@/lib/surebet-calculator';
 
 interface BetCardProps {
   bet: Bet;
@@ -49,12 +50,16 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
     console.log('=== FIM DEBUG ===');
   }
   
+  const surebetRecalculated = (bet.type === 'surebet' || bet.type === 'pa_surebet') && bet.subBets
+    ? calculateSurebet(bet.subBets)
+    : null;
+
   const profit = (() => {
     // Se o lucro final (realizedProfit) foi inserido manualmente, ele tem prioridade MÁXIMA.
     if (bet.realizedProfit !== null && bet.realizedProfit !== undefined) {
       return bet.realizedProfit;
     }
-    
+
     // Se não há lucro real, calcula com base no status e tipo
     if (bet.status !== 'won' && bet.status !== 'lost') return null;
 
@@ -71,10 +76,10 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
        if (bet.status === 'lost') {
          return -(bet.totalStake ?? 0);
        }
-       // Para surebets ganhas, o lucro é o lucro garantido calculado.
-       return bet.guaranteedProfit ?? null;
+       // Para surebets ganhas, usa o lucro recalculado (com cashback correto)
+       return surebetRecalculated?.guaranteedProfit ?? null;
     }
-    
+
     return null;
   })();
 
@@ -208,10 +213,26 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
                                             <div className='text-right font-bold text-primary mt-1'>
                                                 {(typeof sub.stake === 'number' ? sub.stake : 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                                 {sub.isFreebet && <span className='text-xs font-normal text-muted-foreground'> (Freebet)</span>}
+                                                {sub.cashbackValue && sub.cashbackValue > 0 && (
+                                                    <span className='text-xs font-normal text-purple-500 ml-2'>
+                                                        💜 {sub.cashbackValue}{sub.cashbackMode === 'percent' ? '%' : ''} cashback
+                                                    </span>
+                                                )}
                                             </div>
                                         </li>
                                     ))}
                                 </ul>
+                                {surebetRecalculated && (surebetRecalculated.minCashback || 0) > 0 && (
+                                    <div className='mt-4 p-2 bg-purple-500/10 border border-purple-500/20 rounded-md text-sm'>
+                                        <p className='text-muted-foreground'>Cashback Extraível:</p>
+                                        <p className='font-bold text-purple-500'>
+                                            {surebetRecalculated.minCashback === surebetRecalculated.maxCashback
+                                                ? surebetRecalculated.minCashback.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                                                : `${surebetRecalculated.minCashback.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} ~ ${surebetRecalculated.maxCashback.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+                                            }
+                                        </p>
+                                    </div>
+                                )}
                             </AccordionContent>
                         </AccordionItem>
                     </Accordion>
