@@ -220,6 +220,8 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
                                             </div>
                                             <div className='text-xs text-muted-foreground'>{sub.betType}</div>
                                             <div className='text-right font-bold text-primary mt-1'>
+                                                {/* DEBUG - remover depois */}
+                                                {(() => { console.log('sub.stake raw:', sub.stake, typeof sub.stake); return null; })()}
                                                 {formatBRL(Number(sub.stake || 0))}
                                                 {sub.isFreebet && <span className='text-xs font-normal text-muted-foreground'> (Freebet)</span>}
                                                 {sub.cashbackValue && sub.cashbackValue > 0 && (
