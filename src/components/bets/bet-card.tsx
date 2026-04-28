@@ -186,10 +186,19 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
                         </p>
                     </div>
                      <div>
-                        <p className={cn("font-bold", (surebetRecalculated?.profitPercentage ?? bet.profitPercentage ?? 0) >= 0 ? "text-green-500" : "text-destructive")}>
-                            {(surebetRecalculated?.profitPercentage ?? bet.profitPercentage)?.toFixed(2)}%
-                        </p>
-                        <p className="text-xs text-muted-foreground">Retorno (%)</p>
+                        {(() => {
+                          const totalStake = surebetRecalculated?.totalStake ?? bet.totalStake ?? 0;
+                          const guaranteedProfit = surebetRecalculated?.guaranteedProfit ?? bet.guaranteedProfit ?? 0;
+                          const retornoTotal = totalStake + guaranteedProfit;
+                          return (
+                            <>
+                              <p className={cn("font-bold", retornoTotal >= totalStake ? "text-green-500" : "text-destructive")}>
+                                {retornoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </p>
+                              <p className="text-xs text-muted-foreground">Retorno Total</p>
+                            </>
+                          );
+                        })()}
                     </div>
                 </div>
                 {bet.subBets && bet.subBets.length > 0 && (
@@ -211,7 +220,7 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
                                             </div>
                                             <div className='text-xs text-muted-foreground'>{sub.betType}</div>
                                             <div className='text-right font-bold text-primary mt-1'>
-                                                {(typeof sub.stake === 'number' ? sub.stake : 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                {Number(sub.stake || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 {sub.isFreebet && <span className='text-xs font-normal text-muted-foreground'> (Freebet)</span>}
                                                 {sub.cashbackValue && sub.cashbackValue > 0 && (
                                                     <span className='text-xs font-normal text-purple-500 ml-2'>
