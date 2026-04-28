@@ -7,7 +7,7 @@ import { Edit, Trash2, MoreVertical, Calendar, TrendingUp, TrendingDown, Hourgla
 import { Badge } from '../ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
-import { cn } from '@/lib/utils';
+import { cn, formatBRL } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { calculateSurebet } from '@/lib/surebet-calculator';
 
@@ -165,42 +165,42 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
             </>
         ) : (
             <>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm text-center">
-                    <div>
-                        <p className="font-bold">{(surebetRecalculated?.totalStake ?? bet.totalStake)?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                        <p className="text-xs text-muted-foreground">Total Apostado</p>
-                    </div>
-                     <div>
-                        <p className={cn("font-bold", ((bet.status === 'won' && bet.realizedProfit !== null && bet.realizedProfit !== undefined) ? bet.realizedProfit : (surebetRecalculated?.guaranteedProfit ?? bet.guaranteedProfit ?? 0)) >= 0 ? "text-green-500" : "text-destructive")}>
-                            {earnedFreebet && bet.status === 'won' ? (
-                                <span className="flex items-center gap-1">
-                                    <Gift className="w-4 h-4 text-yellow-500" />
-                                    Freebet {bet.earnedFreebetValue?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                </span>
-                            ) : (
-                                ((bet.status === 'won' && bet.realizedProfit !== null && bet.realizedProfit !== undefined) ? bet.realizedProfit : (surebetRecalculated?.guaranteedProfit ?? bet.guaranteedProfit))?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                            )}
+                {(() => {
+                  const totalStake = surebetRecalculated?.totalStake ?? bet.totalStake ?? 0;
+                  const guaranteedProfit = surebetRecalculated?.guaranteedProfit ?? bet.guaranteedProfit ?? 0;
+                  const retornoTotal = totalStake + guaranteedProfit;
+                  const displayedProfit = (bet.status === 'won' && bet.realizedProfit !== null && bet.realizedProfit !== undefined)
+                    ? bet.realizedProfit
+                    : guaranteedProfit;
+
+                  return (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm text-center">
+                      <div>
+                        <p className={cn("font-bold", retornoTotal >= totalStake ? "text-green-500" : "text-destructive")}>
+                          {formatBRL(retornoTotal)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Retorno Total</p>
+                      </div>
+                      <div>
+                        <p className={cn("font-bold", displayedProfit >= 0 ? "text-green-500" : "text-destructive")}>
+                          {earnedFreebet && bet.status === 'won' ? (
+                            <span className="flex items-center gap-1">
+                              <Gift className="w-4 h-4 text-yellow-500" />
+                              {formatBRL(bet.earnedFreebetValue ?? 0)}
+                            </span>
+                          ) : formatBRL(displayedProfit)}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                            {earnedFreebet && bet.status === 'won' ? 'Freebet Ganha' : (bet.status === 'won' && bet.realizedProfit !== null && bet.realizedProfit !== undefined) ? 'Lucro Final' : 'Lucro Garantido'}
+                          {earnedFreebet && bet.status === 'won' ? 'Freebet Ganha' : displayedProfit === bet.realizedProfit ? 'Lucro Final' : 'Lucro Garantido'}
                         </p>
+                      </div>
+                      <div>
+                        <p className="font-bold text-muted-foreground">{formatBRL(totalStake)}</p>
+                        <p className="text-xs text-muted-foreground">Total Apostado</p>
+                      </div>
                     </div>
-                     <div>
-                        {(() => {
-                          const totalStake = surebetRecalculated?.totalStake ?? bet.totalStake ?? 0;
-                          const guaranteedProfit = surebetRecalculated?.guaranteedProfit ?? bet.guaranteedProfit ?? 0;
-                          const retornoTotal = totalStake + guaranteedProfit;
-                          return (
-                            <>
-                              <p className={cn("font-bold", retornoTotal >= totalStake ? "text-green-500" : "text-destructive")}>
-                                {retornoTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </p>
-                              <p className="text-xs text-muted-foreground">Retorno Total</p>
-                            </>
-                          );
-                        })()}
-                    </div>
-                </div>
+                  );
+                })()}
                 {bet.subBets && bet.subBets.length > 0 && (
                     <Accordion type="single" collapsible className="w-full">
                         <AccordionItem value="sub-bets">
@@ -220,7 +220,7 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
                                             </div>
                                             <div className='text-xs text-muted-foreground'>{sub.betType}</div>
                                             <div className='text-right font-bold text-primary mt-1'>
-                                                {Number(sub.stake || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                {formatBRL(Number(sub.stake || 0))}
                                                 {sub.isFreebet && <span className='text-xs font-normal text-muted-foreground'> (Freebet)</span>}
                                                 {sub.cashbackValue && sub.cashbackValue > 0 && (
                                                     <span className='text-xs font-normal text-purple-500 ml-2'>
