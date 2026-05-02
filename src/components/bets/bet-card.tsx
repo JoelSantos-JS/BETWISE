@@ -173,8 +173,10 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
                     ? bet.realizedProfit
                     : guaranteedProfit;
 
+                  const roi = surebetRecalculated?.profitPercentage ?? bet.profitPercentage ?? 0;
+
                   return (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm text-center">
+                    <div className="grid grid-cols-2 gap-2 text-sm text-center">
                       <div>
                         <p className={cn("font-bold", retornoTotal >= totalStake ? "text-green-500" : "text-destructive")}>
                           {formatBRL(retornoTotal)}
@@ -197,6 +199,12 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
                       <div>
                         <p className="font-bold text-muted-foreground">{formatBRL(totalStake)}</p>
                         <p className="text-xs text-muted-foreground">Total Apostado</p>
+                      </div>
+                      <div>
+                        <p className={cn("font-bold", roi >= 0 ? "text-green-500" : "text-destructive")}>
+                          {isFinite(roi) ? `${roi.toFixed(2)}%` : 'N/A'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Retorno (%)</p>
                       </div>
                     </div>
                   );
