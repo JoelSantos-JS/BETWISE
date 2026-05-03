@@ -968,7 +968,7 @@ export default function BetsPage() {
             lossAmount: 0,
             finalBalance: 0,
             count: 0,
-            noPaBets: [] as string[], // jogos sem P.A. em alguma perna
+            noPaBets: [] as { event: string; bookmakers: string[] }[],
         }));
 
         for (const bet of filteredBets) {
@@ -1055,9 +1055,11 @@ export default function BetsPage() {
 
             // Coleta jogos sem P.A. em alguma perna
             if ((bet.type === 'pa_surebet' || bet.type === 'surebet') && bet.subBets) {
-                const hasMissingPa = bet.subBets.some(sb => sb.hasPa === false);
-                if (hasMissingPa) {
-                    bucket.noPaBets.push(bet.event);
+                const noPaBookmakers = bet.subBets
+                    .filter(sb => sb.hasPa === false)
+                    .map(sb => sb.bookmaker);
+                if (noPaBookmakers.length > 0) {
+                    bucket.noPaBets.push({ event: bet.event, bookmakers: noPaBookmakers });
                 }
             }
 
@@ -1897,9 +1899,12 @@ export default function BetsPage() {
                                             <div className="text-xs text-orange-500 font-semibold mb-1 flex items-center gap-1">
                                                 ⚠️ Sem P.A. em alguma perna:
                                             </div>
-                                            <ul className="space-y-0.5">
-                                                {d.noPaBets.map((event, i) => (
-                                                    <li key={i} className="text-xs text-muted-foreground truncate">• {event}</li>
+                                            <ul className="space-y-1">
+                                                {d.noPaBets.map((item, i) => (
+                                                    <li key={i} className="text-xs text-muted-foreground">
+                                                        <span className="truncate">• {item.event}</span>
+                                                        <span className="ml-1 text-orange-400 font-medium">({item.bookmakers.join(', ')})</span>
+                                                    </li>
                                                 ))}
                                             </ul>
                                         </div>
