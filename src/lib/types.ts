@@ -5,6 +5,7 @@ export interface SubBet {
     odds: number;
     stake: number;
     isFreebet?: boolean;
+    hasPa?: boolean;
     cashbackValue?: number | null;
     cashbackMode?: 'percent' | 'fixed' | null;
     accountName?: string | null;

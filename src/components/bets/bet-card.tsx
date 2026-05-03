@@ -223,6 +223,12 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
                                                 <span className="flex items-center gap-1.5">
                                                     {sub.isFreebet && <Star className="w-4 h-4 text-yellow-500" />}
                                                     {sub.bookmaker}
+                                                    {sub.hasPa === false && (
+                                                        <Badge variant="outline" className="text-xs text-orange-500 border-orange-500/50">Sem P.A.</Badge>
+                                                    )}
+                                                    {sub.hasPa === true && (
+                                                        <Badge variant="outline" className="text-xs text-green-500 border-green-500/50">P.A.</Badge>
+                                                    )}
                                                 </span>
                                                 <Badge variant="outline">@{typeof sub.odds === 'number' ? sub.odds.toFixed(2) : '--'}</Badge>
                                             </div>

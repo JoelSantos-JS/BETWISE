@@ -35,6 +35,7 @@ const subBetSchema = z.object({
   odds: z.coerce.number().min(1.01, "Deve ser > 1.00"),
   stake: z.coerce.number().min(0.01, "Deve ser > 0"),
   isFreebet: z.boolean().optional(),
+  hasPa: z.boolean().optional(),
   accountName: z.string().min(1, "A conta é obrigatória."),
   accountCpf: z.string().min(1, "O CPF é obrigatório."),
   cashbackValue: z.coerce.number().min(0).optional(),
@@ -671,11 +672,12 @@ useEffect(() => {
                                             </div>
                                           </div>
                                         </div>
-                                         <FormField
+                                        <div className="flex flex-wrap gap-4 mt-4">
+                                          <FormField
                                             control={control}
                                             name={`subBets.${index}.isFreebet`}
                                             render={({ field }) => (
-                                                <FormItem className="flex flex-row items-center space-x-2 space-y-0 mt-4">
+                                                <FormItem className="flex flex-row items-center space-x-2 space-y-0">
                                                     <FormControl>
                                                         <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                                                     </FormControl>
@@ -684,7 +686,22 @@ useEffect(() => {
                                                     </FormLabel>
                                                 </FormItem>
                                             )}
-                                        />
+                                          />
+                                          <FormField
+                                            control={control}
+                                            name={`subBets.${index}.hasPa`}
+                                            render={({ field }) => (
+                                                <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                                                    <FormControl>
+                                                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                                                    </FormControl>
+                                                    <FormLabel className="text-sm font-normal flex items-center gap-1">
+                                                        <Target className="w-4 h-4 text-orange-500" /> Casa tem P.A.?
+                                                    </FormLabel>
+                                                </FormItem>
+                                            )}
+                                          />
+                                        </div>
                                          {fields.length > 2 && (
                                             <Button type="button" variant="destructive" size="icon" className="absolute top-2 right-2" onClick={() => remove(index)}>
                                                 <Trash2 className="w-4 h-4"/>
@@ -693,7 +710,7 @@ useEffect(() => {
                                     </div>
                                 ))}
                             </div>
-                            <Button type="button" variant="outline" size="sm" className="mt-4 w-full sm:w-auto" onClick={() => append({ id: new Date().toISOString() , bookmaker: '', betType: '', odds: 1.5, stake: 0, isFreebet: false, cashbackValue: 0, cashbackMode: 'percent', accountName: '', accountCpf: '' })}>
+                            <Button type="button" variant="outline" size="sm" className="mt-4 w-full sm:w-auto" onClick={() => append({ id: new Date().toISOString(), bookmaker: '', betType: '', odds: 1.5, stake: 0, isFreebet: false, hasPa: false, cashbackValue: 0, cashbackMode: 'percent', accountName: '', accountCpf: '' })}>
                                 <PlusCircle className="mr-2"/> Adicionar Aposta
                             </Button>
                              <FormField control={control} name="earnedFreebetValue" render={({ field }) => (
@@ -814,11 +831,12 @@ useEffect(() => {
                                             </div>
                                           </div>
                                         </div>
-                                         <FormField
+                                        <div className="flex flex-wrap gap-4 mt-4">
+                                          <FormField
                                             control={control}
                                             name={`subBets.${index}.isFreebet`}
                                             render={({ field }) => (
-                                                <FormItem className="flex flex-row items-center space-x-2 space-y-0 mt-4">
+                                                <FormItem className="flex flex-row items-center space-x-2 space-y-0">
                                                     <FormControl>
                                                         <Checkbox checked={field.value} onCheckedChange={field.onChange} />
                                                     </FormControl>
@@ -827,7 +845,22 @@ useEffect(() => {
                                                     </FormLabel>
                                                 </FormItem>
                                             )}
-                                        />
+                                          />
+                                          <FormField
+                                            control={control}
+                                            name={`subBets.${index}.hasPa`}
+                                            render={({ field }) => (
+                                                <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                                                    <FormControl>
+                                                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                                                    </FormControl>
+                                                    <FormLabel className="text-sm font-normal flex items-center gap-1">
+                                                        <Target className="w-4 h-4 text-orange-500" /> Casa tem P.A.?
+                                                    </FormLabel>
+                                                </FormItem>
+                                            )}
+                                          />
+                                        </div>
                                          {fields.length > 2 && (
                                             <Button type="button" variant="destructive" size="icon" className="absolute top-2 right-2" onClick={() => remove(index)}>
                                                 <Trash2 className="w-4 h-4"/>
@@ -836,7 +869,7 @@ useEffect(() => {
                                     </div>
                                 ))}
                             </div>
-                            <Button type="button" variant="outline" size="sm" className="mt-4 w-full sm:w-auto" onClick={() => append({ id: new Date().toISOString() , bookmaker: '', betType: '', odds: 1.5, stake: 0, isFreebet: false, cashbackValue: 0, cashbackMode: 'percent', accountName: '', accountCpf: '' })}>
+                            <Button type="button" variant="outline" size="sm" className="mt-4 w-full sm:w-auto" onClick={() => append({ id: new Date().toISOString(), bookmaker: '', betType: '', odds: 1.5, stake: 0, isFreebet: false, hasPa: false, cashbackValue: 0, cashbackMode: 'percent', accountName: '', accountCpf: '' })}>
                                 <PlusCircle className="mr-2"/> Adicionar Aposta
                             </Button>
                              <FormField control={control} name="earnedFreebetValue" render={({ field }) => (
