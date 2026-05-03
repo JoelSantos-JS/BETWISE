@@ -968,6 +968,7 @@ export default function BetsPage() {
             lossAmount: 0,
             finalBalance: 0,
             count: 0,
+            noPaBets: [] as string[], // jogos sem P.A. em alguma perna
         }));
 
         for (const bet of filteredBets) {
@@ -1051,6 +1052,14 @@ export default function BetsPage() {
             const net = calcBetNet(bet);
             bucket.finalBalance += net;
             if (net < 0) bucket.lossAmount += -net;
+
+            // Coleta jogos sem P.A. em alguma perna
+            if ((bet.type === 'pa_surebet' || bet.type === 'surebet') && bet.subBets) {
+                const hasMissingPa = bet.subBets.some(sb => sb.hasPa === false);
+                if (hasMissingPa) {
+                    bucket.noPaBets.push(bet.event);
+                }
+            }
 
             bucket.count += 1;
         }
@@ -1883,6 +1892,18 @@ export default function BetsPage() {
                                         <div className="text-xs text-muted-foreground">Saldo Final</div>
                                         <div className={`text-sm font-semibold ${d.finalBalance >= 0 ? 'text-green-500' : 'text-destructive'}`}>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(d.finalBalance)}</div>
                                     </div>
+                                    {d.noPaBets.length > 0 && (
+                                        <div className="mt-3 pt-3 border-t border-orange-500/20">
+                                            <div className="text-xs text-orange-500 font-semibold mb-1 flex items-center gap-1">
+                                                ⚠️ Sem P.A. em alguma perna:
+                                            </div>
+                                            <ul className="space-y-0.5">
+                                                {d.noPaBets.map((event, i) => (
+                                                    <li key={i} className="text-xs text-muted-foreground truncate">• {event}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
                         ))}
