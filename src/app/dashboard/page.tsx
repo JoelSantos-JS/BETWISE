@@ -1881,35 +1881,10 @@ export default function BetsPage() {
              {/* Filtered Statistics */}
             {(dateFilter !== 'all' || profitFilter !== 'all' || dayFilter.length > 0) && (
                 <div className="mb-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-xl font-semibold flex items-center gap-2">
-                            <BarChart className="h-5 w-5" />
-                            Estatísticas do Período Filtrado
-                        </h3>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm" className="gap-2">
-                                    <FileDown className="w-4 h-4" />
-                                    Exportar Excel
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => exportBets('all')}>
-                                    <FileDown className="w-4 h-4 mr-2" />
-                                    Todas as apostas
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => exportBets('filtered')}>
-                                    <FileDown className="w-4 h-4 mr-2" />
-                                    Apostas filtradas ({filteredBets.length})
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => exportBets('month')}>
-                                    <FileDown className="w-4 h-4 mr-2" />
-                                    Por mês (abas separadas)
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
+                    <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <BarChart className="h-5 w-5" />
+                        Estatísticas do Período Filtrado
+                    </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
                         <SummaryCard
                             title="Total de Apostas"
@@ -2333,7 +2308,32 @@ export default function BetsPage() {
                 </TabsContent>
 
                 <TabsContent value="stats">
-                    <h3 className="text-2xl font-bold mb-4">Estatísticas das Apostas</h3>
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-2xl font-bold">Estatísticas das Apostas</h3>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" className="gap-2">
+                                    <FileDown className="w-4 h-4" />
+                                    Exportar Excel
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => exportBets('all')}>
+                                    <FileDown className="w-4 h-4 mr-2" />
+                                    Todas as apostas ({bets.length})
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => exportBets('filtered')}>
+                                    <FileDown className="w-4 h-4 mr-2" />
+                                    Apostas filtradas ({filteredBets.length})
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => exportBets('month')}>
+                                    <FileDown className="w-4 h-4 mr-2" />
+                                    Por mês (abas separadas)
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                     <Card className="mb-6">
                         <CardHeader>
                             <CardTitle>Filtros e Ordenação</CardTitle>
