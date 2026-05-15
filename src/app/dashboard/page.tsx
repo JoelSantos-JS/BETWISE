@@ -38,6 +38,7 @@ import { collection, getDocs, getDoc, doc, setDoc, deleteDoc, addDoc, Timestamp,
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { BookmakerCard } from '@/components/bookmakers/bookmaker-card';
 import { BookmakerForm } from '@/components/bookmakers/bookmaker-form';
 import * as XLSX from 'xlsx';
@@ -313,6 +314,95 @@ export default function BetsPage() {
         lost: 'Perdida',
         cashed_out: 'Cash Out',
         void: 'Anulada'
+    };
+
+    const betTypeLabel = (type: Bet['type']) => {
+        if (type === 'single') return 'Simples';
+        if (type === 'surebet') return 'Surebet';
+        if (type === 'pa_surebet') return 'P.A. Surebet';
+        return type;
+    };
+
+    const formatCurrency = (v: number | null | undefined) =>
+        v == null ? '' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+    const betToRow = (bet: Bet) => {
+        const net = calcBetNet(bet);
+        const calc = (bet.type === 'surebet' || bet.type === 'pa_surebet') && bet.subBets
+            ? calculateSurebet(bet.subBets) : null;
+        const bookmakers = bet.type === 'single'
+            ? (bet.bookmaker ?? '')
+            : (bet.subBets?.map(s => s.bookmaker).join(' / ') ?? '');
+        const stakes = bet.type === 'single'
+            ? formatCurrency(bet.stake)
+            : (bet.subBets?.map(s => `${s.bookmaker}: ${formatCurrency(s.stake)}`).join(' | ') ?? '');
+        const odds = bet.type === 'single'
+            ? (bet.odds?.toFixed(2) ?? '')
+            : (bet.subBets?.map(s => `${s.bookmaker}: @${s.odds?.toFixed(2)}`).join(' | ') ?? '');
+        const hasPa = bet.type === 'single'
+            ? ''
+            : (bet.subBets?.map(s => `${s.bookmaker}: ${s.hasPa === false ? 'Não' : s.hasPa === true ? 'Sim' : '?'}`).join(' | ') ?? '');
+        const profit = net ?? (calc?.guaranteedProfit ?? null);
+        const roi = calc?.profitPercentage ?? (
+            bet.type === 'single' && bet.stake && bet.stake > 0 && profit != null
+                ? (profit / bet.stake) * 100 : null
+        );
+        return {
+            'Data': new Date(bet.date).toLocaleDateString('pt-BR'),
+            'Evento': bet.event,
+            'Tipo': betTypeLabel(bet.type),
+            'Esporte': bet.sport,
+            'Status': betStatusLabels[bet.status],
+            'Casa(s)': bookmakers,
+            'Conta': bet.accountName ?? '',
+            'Stake(s)': stakes,
+            'Odds': odds,
+            'Total Apostado': calc ? formatCurrency(calc.totalStake) : formatCurrency(bet.stake),
+            'Lucro / Resultado': formatCurrency(profit),
+            'ROI (%)': roi != null ? `${roi.toFixed(2)}%` : '',
+            'P.A. por Casa': hasPa,
+            'Notas': bet.notes ?? '',
+        };
+    };
+
+    const exportBets = (scope: 'all' | 'filtered' | 'month') => {
+        const wb = XLSX.utils.book_new();
+        const monthNames = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+        if (scope === 'month') {
+            // One sheet per month, sorted chronologically
+            const byMonth: Record<string, Bet[]> = {};
+            for (const bet of [...bets].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())) {
+                const d = new Date(bet.date);
+                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                if (!byMonth[key]) byMonth[key] = [];
+                byMonth[key].push(bet);
+            }
+            for (const [key, monthBets] of Object.entries(byMonth).sort()) {
+                const [year, month] = key.split('-');
+                const sheetName = `${monthNames[parseInt(month) - 1]} ${year}`.slice(0, 31);
+                const rows = monthBets.map(betToRow);
+                const ws = XLSX.utils.json_to_sheet(rows);
+                ws['!cols'] = [8,30,12,12,10,25,15,35,30,14,18,10,30,40].map(w => ({ wch: w }));
+                XLSX.utils.book_append_sheet(wb, ws, sheetName);
+            }
+        } else {
+            const source = scope === 'filtered' ? filteredBets : bets;
+            const rows = [...source]
+                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                .map(betToRow);
+            const ws = XLSX.utils.json_to_sheet(rows);
+            ws['!cols'] = [8,30,12,12,10,25,15,35,30,14,18,10,30,40].map(w => ({ wch: w }));
+            const label = scope === 'filtered' ? 'Apostas Filtradas' : 'Todas as Apostas';
+            XLSX.utils.book_append_sheet(wb, ws, label);
+        }
+
+        const filename = scope === 'month'
+            ? 'betwise_por_mes.xlsx'
+            : scope === 'filtered'
+            ? 'betwise_filtradas.xlsx'
+            : 'betwise_todas_apostas.xlsx';
+        XLSX.writeFile(wb, filename);
     };
     
     // Memoized calculations
@@ -1791,10 +1881,35 @@ export default function BetsPage() {
              {/* Filtered Statistics */}
             {(dateFilter !== 'all' || profitFilter !== 'all' || dayFilter.length > 0) && (
                 <div className="mb-6">
-                    <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                        <BarChart className="h-5 w-5" />
-                        Estatísticas do Período Filtrado
-                    </h3>
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-xl font-semibold flex items-center gap-2">
+                            <BarChart className="h-5 w-5" />
+                            Estatísticas do Período Filtrado
+                        </h3>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm" className="gap-2">
+                                    <FileDown className="w-4 h-4" />
+                                    Exportar Excel
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => exportBets('all')}>
+                                    <FileDown className="w-4 h-4 mr-2" />
+                                    Todas as apostas
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => exportBets('filtered')}>
+                                    <FileDown className="w-4 h-4 mr-2" />
+                                    Apostas filtradas ({filteredBets.length})
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => exportBets('month')}>
+                                    <FileDown className="w-4 h-4 mr-2" />
+                                    Por mês (abas separadas)
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
                         <SummaryCard
                             title="Total de Apostas"
