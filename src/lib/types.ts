@@ -16,6 +16,8 @@ export interface Bookmaker {
     id: string;
     name: string;
     initialBankroll: number;
+    currentBalance?: number | null;
+    bankrollResetAt?: Date | string | null;
 }
 
 export interface Account {

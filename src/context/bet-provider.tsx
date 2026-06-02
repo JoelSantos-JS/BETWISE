@@ -195,9 +195,13 @@ export function BetProvider({ children }: BetProviderProps) {
 
     try {
       const bookmakersCollectionRef = collection(db, 'users', user.uid, 'bookmakers');
-      const docRef = await addDoc(bookmakersCollectionRef, bookmakerData);
+      const toSave = {
+        ...bookmakerData,
+        currentBalance: bookmakerData.currentBalance ?? bookmakerData.initialBankroll ?? 0,
+      };
+      const docRef = await addDoc(bookmakersCollectionRef, toSave);
 
-      const newBookmaker = { ...bookmakerData, id: docRef.id };
+      const newBookmaker = { ...toSave, id: docRef.id };
       setBookmakers(prev => [...prev, newBookmaker]);
     } catch (error) {
       console.error('Error adding bookmaker:', error);

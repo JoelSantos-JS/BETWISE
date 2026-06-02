@@ -253,7 +253,9 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
   };
   
   const surebetCalculations = React.useMemo(() => {
-    if (watchedType !== 'surebet' && watchedType !== 'pa_surebet') return { totalStake: 0, guaranteedProfit: 0, profitPercentage: 0 };
+    if (watchedType !== 'surebet' && watchedType !== 'pa_surebet') {
+      return { totalStake: 0, guaranteedProfit: 0, profitPercentage: 0, minCashback: 0, maxCashback: 0 };
+    }
     // @ts-ignore
     return calculateSurebet(watchedSubBets);
   }, [watchedType, watchedSubBets]);

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
+  Calculator,
   Layers,
   Sparkles,
 } from "lucide-react";
@@ -27,6 +28,12 @@ export function MainNav({
       label: "AI Insights",
       icon: Sparkles,
       active: pathname === `/dashboard/ai-insights`,
+    },
+    {
+      href: `/dashboard/calculadora-surebet`,
+      label: "Calculadora",
+      icon: Calculator,
+      active: pathname === `/dashboard/calculadora-surebet`,
     },
     {
       href: `/dashboard/casas-clones`,
