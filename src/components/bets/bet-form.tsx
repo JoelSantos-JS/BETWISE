@@ -3,7 +3,7 @@
 import { useForm, useFieldArray, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, ShieldCheck, Trash2, PlusCircle, Star, Target, Gift } from "lucide-react";
+import { Loader2, ShieldCheck, Trash2, PlusCircle, Star, Target, Gift, Zap } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import React, { useEffect, useState } from 'react';
@@ -63,6 +63,7 @@ const singleBetSchema = baseBetSchema.extend({
   stake: z.coerce.number().min(0.01, "O valor apostado deve ser maior que zero."),
   odds: z.coerce.number().min(1.01, "As odds devem ser maiores que 1.00."),
   bookmaker: z.string().min(1, "A casa de apostas é obrigatória."),
+  isBoostedBet: z.boolean().optional().nullable(),
 });
 
 const surebetSchema = baseBetSchema.extend({
@@ -93,6 +94,7 @@ type BetFormValues = z.infer<typeof baseBetSchema> & {
   betType?: string;
   stake?: number;
   odds?: number;
+  isBoostedBet?: boolean | null;
   subBets?: z.infer<typeof subBetSchema>[];
   totalStake?: number;
   guaranteedProfit?: number;
@@ -147,6 +149,7 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
         stake: betToEdit.stake || 0,
         odds: betToEdit.odds || 1.01,
         bookmaker: betToEdit.bookmaker || '',
+        isBoostedBet: Boolean(betToEdit.isBoostedBet),
     } : {
         type: (betToEdit.type || 'surebet') as 'surebet' | 'pa_surebet',
         sport: betToEdit.sport,
@@ -183,6 +186,7 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
         notes: "",
         earnedFreebetValue: 0,
         bookmaker: bookmakers.length > 0 ? bookmakers[0].name : '',
+        isBoostedBet: false,
         outcomeScenario: 'standard',
     },
   });
@@ -320,6 +324,11 @@ useEffect(() => {
     }
     if(finalData.realizedProfit === undefined) {
         (finalData as any).realizedProfit = null;
+    }
+    if(finalData.type === 'single') {
+        (finalData as any).isBoostedBet = Boolean(finalData.isBoostedBet);
+    } else {
+        (finalData as any).isBoostedBet = null;
     }
      if(!finalData.outcomeScenario) {
         (finalData as any).outcomeScenario = null;
@@ -485,6 +494,20 @@ useEffect(() => {
                                     <FormMessage />
                                 </FormItem>
                             )} />
+                            <FormField
+                              control={control}
+                              name="isBoostedBet"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center space-x-2 space-y-0 rounded-md border p-3">
+                                  <FormControl>
+                                    <Checkbox checked={Boolean(field.value)} onCheckedChange={field.onChange} />
+                                  </FormControl>
+                                  <FormLabel className="text-sm font-normal flex items-center gap-1">
+                                    <Zap className="w-4 h-4 text-yellow-500" /> Aposta aumentada
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
                             <FormField control={control} name="earnedFreebetValue" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Ganha Freebet de (R$)? (Opcional)</FormLabel>

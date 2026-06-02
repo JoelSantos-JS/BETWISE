@@ -55,6 +55,7 @@ export interface Bet {
   betType?: string | null;
   stake?: number | null;
   odds?: number | null;
+  isBoostedBet?: boolean | null;
   cashbackValue?: number | null;
   cashbackMode?: 'percent' | 'fixed' | null;
   

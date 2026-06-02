@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Bet, Bookmaker as BookmakerType, FreeSpin } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, BarChart, AlertTriangle, Save, TrendingUp, TrendingDown, Calculator, Wallet, Landmark, Building, FileDown, Loader2, Calendar, Filter, Pencil, Eye, EyeOff } from 'lucide-react';
+import { PlusCircle, BarChart, AlertTriangle, Save, TrendingUp, TrendingDown, Calculator, Wallet, Landmark, Building, FileDown, Loader2, Calendar, Filter, Pencil, Eye, EyeOff, Zap } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BetCard } from '@/components/bets/bet-card';
@@ -419,6 +419,7 @@ export default function BetsPage() {
             'Data': new Date(bet.date).toLocaleDateString('pt-BR'),
             'Evento': bet.event,
             'Tipo': betTypeLabel(bet.type),
+            'Aposta Aumentada': bet.type === 'single' && bet.isBoostedBet ? 'Sim' : 'Nao',
             'Esporte': bet.sport,
             'Status': betStatusLabels[bet.status],
             'Casa(s)': bookmakers,
@@ -979,6 +980,43 @@ export default function BetsPage() {
             finalBalance
         };
     }, [filteredBets, filteredFreeSpins]);
+
+    const boostedBetStats = useMemo(() => {
+        const boostedBets = filteredBets.filter((bet) => bet.type === 'single' && bet.isBoostedBet);
+        const totalStaked = boostedBets.reduce((sum, bet) => sum + (bet.stake ?? 0), 0);
+        const totalNet = boostedBets.reduce((sum, bet) => sum + calcBetNet(bet), 0);
+        const totalProfit = boostedBets.reduce((sum, bet) => {
+            const net = calcBetNet(bet);
+            return net > 0 ? sum + net : sum;
+        }, 0);
+        const totalLoss = boostedBets.reduce((sum, bet) => {
+            const net = calcBetNet(bet);
+            return net < 0 ? sum + (-net) : sum;
+        }, 0);
+        const wonBets = boostedBets.filter((bet) => bet.status === 'won').length;
+        const lostBets = boostedBets.filter((bet) => bet.status === 'lost').length;
+        const settledCount = wonBets + lostBets;
+        const winRate = settledCount > 0 ? (wonBets / settledCount) * 100 : 0;
+        const roi = totalStaked > 0 ? (totalNet / totalStaked) * 100 : 0;
+        const recent = boostedBets
+            .slice()
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .slice(0, 5);
+
+        return {
+            bets: boostedBets,
+            count: boostedBets.length,
+            totalStaked,
+            totalNet,
+            totalProfit,
+            totalLoss,
+            wonBets,
+            lostBets,
+            winRate,
+            roi,
+            recent,
+        };
+    }, [filteredBets]);
 
     const allBetsStats = useMemo(() => {
         const rows = bets.map(bet => {
@@ -2009,6 +2047,7 @@ export default function BetsPage() {
                     'Conta': bet.accountName ?? '',
                     'CPF': bet.accountCpf ?? '',
                     'Tipo': bet.type === 'single' ? 'Simples' : (bet.type === 'surebet' ? 'Surebet' : 'P.A. Surebet'),
+                    'Aposta Aumentada': bet.type === 'single' && bet.isBoostedBet ? 'Sim' : 'Nao',
                     'Seleção/Mercado': bet.type === 'single' ? bet.betType : bet.subBets?.map(sb => `${sb.bookmaker}: ${sb.betType}`).join(' | '),
                     'Casa(s)': bet.type === 'single' ? bet.bookmaker : bet.subBets?.map(sb => sb.bookmaker).join(', '),
                     'Stake Total': bet.type === 'single' ? bet.stake : bet.totalStake,
@@ -2335,6 +2374,53 @@ export default function BetsPage() {
                     </div>
                 </div>
              )}
+
+            <div className="mb-6">
+                <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <Zap className="h-5 w-5 text-yellow-500" />
+                    Relatorio de Apostas Aumentadas
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-4">
+                    <SummaryCard title="Aumentadas" value={boostedBetStats.count} icon={Zap} />
+                    <SummaryCard title="Saldo das Aumentadas" value={boostedBetStats.totalNet} icon={boostedBetStats.totalNet >= 0 ? TrendingUp : TrendingDown} isCurrency valueClassName={boostedBetStats.totalNet >= 0 ? "text-green-500" : "text-destructive"} />
+                    <SummaryCard title="Lucro das Aumentadas" value={boostedBetStats.totalProfit} icon={TrendingUp} isCurrency valueClassName={boostedBetStats.totalProfit >= 0 ? "text-green-500" : "text-destructive"} />
+                    <SummaryCard title="Perdas das Aumentadas" value={boostedBetStats.totalLoss} icon={TrendingDown} isCurrency valueClassName={boostedBetStats.totalLoss > 0 ? "text-destructive" : ""} />
+                    <SummaryCard title="Apostado em Aumentadas" value={boostedBetStats.totalStaked} icon={Wallet} isCurrency />
+                    <SummaryCard title="ROI das Aumentadas" value={boostedBetStats.roi} icon={BarChart} isPercentage valueClassName={boostedBetStats.roi >= 0 ? "text-green-500" : "text-destructive"} />
+                </div>
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">Ultimas apostas aumentadas</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {boostedBetStats.recent.length > 0 ? (
+                            <div className="space-y-2">
+                                {boostedBetStats.recent.map((bet) => {
+                                    const net = calcBetNet(bet);
+                                    return (
+                                        <div key={bet.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-md border p-3">
+                                            <div className="min-w-0">
+                                                <div className="font-semibold truncate">{bet.event}</div>
+                                                <div className="text-xs text-muted-foreground truncate">
+                                                    {format(new Date(bet.date), 'dd/MM/yyyy')} · {bet.bookmaker ?? 'Sem casa'} · {bet.betType ?? 'Sem mercado'}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center justify-between sm:justify-end gap-4">
+                                                <div className="text-sm text-muted-foreground">{betStatusLabels[bet.status]}</div>
+                                                <div className={net >= 0 ? "font-bold text-green-500" : "font-bold text-destructive"}>
+                                                    {net.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="text-sm text-muted-foreground">Nenhuma aposta aumentada encontrada neste recorte.</div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
 
             {/* Daily Breakdown Cards */}
             {(dateFilter !== 'all' || profitFilter !== 'all' || dayFilter.length > 0) && dailyStats.length > 0 && (

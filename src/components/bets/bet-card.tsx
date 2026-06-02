@@ -103,6 +103,11 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
                     {bet.bookmaker && bet.type === 'single' && (
                         <Badge variant="outline" className="gap-1.5"><Building className="w-3 h-3" /> {bet.bookmaker}</Badge>
                     )}
+                    {bet.type === 'single' && bet.isBoostedBet && (
+                        <Badge className="bg-yellow-500 hover:bg-yellow-600 border-transparent text-black gap-1.5">
+                            <Zap className="w-3 h-3" /> Aumentada
+                        </Badge>
+                    )}
                     {bet.accountName && (
                         <Badge variant="secondary">{bet.accountName}</Badge>
                     )}
