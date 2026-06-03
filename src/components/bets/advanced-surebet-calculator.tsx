@@ -70,10 +70,16 @@ function layToBackOdd(oddLay: number, commission = 0) {
   return truncate3((oddLay - commissionDecimal) / (oddLay - 1));
 }
 
+function applyBackCommission(oddBack: number, commission = 0) {
+  if (oddBack <= 1 || !Number.isFinite(oddBack)) return 0;
+  const commissionDecimal = Math.min(Math.max(commission, 0), 100) / 100;
+  return truncate3(1 + (oddBack - 1) * (1 - commissionDecimal));
+}
+
 function getEffectiveOdd(leg: CalculatorLeg) {
   if (leg.isLay) return layToBackOdd(leg.oddLay, leg.commission);
   if (leg.oddBack <= 1 || !Number.isFinite(leg.oddBack)) return 0;
-  return leg.oddBack;
+  return applyBackCommission(leg.oddBack, leg.commission);
 }
 
 function getLegReturn(leg: CalculatorLeg) {
@@ -173,14 +179,11 @@ export function AdvancedSurebetCalculator() {
 
         if (field === "isLay") {
           const isLay = Boolean(value);
-          const nextLayOdd = isLay ? leg.oddLay : 0;
-          const nextCommission = isLay ? leg.commission : 0;
+          const nextLayOdd = isLay ? (leg.oddLay > 1 ? leg.oddLay : leg.oddBack) : 0;
           return {
             ...leg,
             isLay,
             oddLay: nextLayOdd,
-            commission: nextCommission,
-            oddBack: isLay && nextLayOdd > 1 ? layToBackOdd(nextLayOdd, nextCommission) : leg.oddBack,
           };
         }
 
@@ -189,7 +192,6 @@ export function AdvancedSurebetCalculator() {
           return {
             ...leg,
             oddLay,
-            oddBack: oddLay > 1 ? layToBackOdd(oddLay, leg.commission) : leg.oddBack,
           };
         }
 
@@ -198,7 +200,6 @@ export function AdvancedSurebetCalculator() {
           return {
             ...leg,
             commission,
-            oddBack: leg.isLay && leg.oddLay > 1 ? layToBackOdd(leg.oddLay, commission) : leg.oddBack,
           };
         }
 
@@ -206,9 +207,6 @@ export function AdvancedSurebetCalculator() {
           return {
             ...leg,
             oddBack: Number(value),
-            oddLay: 0,
-            isLay: false,
-            commission: 0,
           };
         }
 
@@ -304,7 +302,7 @@ export function AdvancedSurebetCalculator() {
                   </Button>
                 </CardHeader>
                 <CardContent className="space-y-3 px-3 pb-3 sm:px-4 sm:pb-4">
-                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-6">
                     <div className="space-y-2">
                       <Label htmlFor={`bookmaker-${leg.id}`}>Casa</Label>
                       <Input
@@ -330,68 +328,65 @@ export function AdvancedSurebetCalculator() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor={`odd-back-${leg.id}`}>Odd Back</Label>
+                      <Label htmlFor={`odd-${leg.id}`}>ODD</Label>
                       <Input
-                        id={`odd-back-${leg.id}`}
+                        id={`odd-${leg.id}`}
                         type="number"
                         min="1"
                         step="0.001"
-                        value={leg.oddBack}
-                        disabled={leg.isLay}
-                        onChange={(event) => updateLeg(leg.id, "oddBack", Number(event.target.value))}
+                        value={leg.isLay ? leg.oddLay : leg.oddBack}
+                        onChange={(event) =>
+                          updateLeg(leg.id, leg.isLay ? "oddLay" : "oddBack", Number(event.target.value))
+                        }
                         className="text-right font-semibold"
                       />
                     </div>
 
                     <div className="space-y-2">
-                      <Label>LAY</Label>
-                      <div className="flex h-10 items-center gap-3 rounded-md border border-input px-3">
-                        <Switch
-                          checked={leg.isLay}
-                          onCheckedChange={(checked) => updateLeg(leg.id, "isLay", checked)}
-                          aria-label="Alternar LAY"
-                        />
-                        <span className="text-sm font-medium">{leg.isLay ? "Ativo" : "Inativo"}</span>
+                      <Label>Tipo</Label>
+                      <div className="grid h-10 grid-cols-2 overflow-hidden rounded-md border border-input bg-background">
+                        <Button
+                          type="button"
+                          variant={!leg.isLay ? "default" : "ghost"}
+                          className="h-full rounded-none"
+                          onClick={() => updateLeg(leg.id, "isLay", false)}
+                          aria-pressed={!leg.isLay}
+                        >
+                          Back
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={leg.isLay ? "default" : "ghost"}
+                          className="h-full rounded-none"
+                          onClick={() => updateLeg(leg.id, "isLay", true)}
+                          aria-pressed={leg.isLay}
+                        >
+                          Lay
+                        </Button>
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Odd efetiva</Label>
-                      <div className="flex h-10 items-center justify-end rounded-md border border-input px-3 font-semibold">
+                      <Label htmlFor={`commission-${leg.id}`}>Comissao %</Label>
+                      <Input
+                        id={`commission-${leg.id}`}
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        value={leg.commission}
+                        onChange={(event) => updateLeg(leg.id, "commission", Number(event.target.value))}
+                        className="text-right font-semibold"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>{leg.isLay ? "Odd convertida" : "Odd efetiva"}</Label>
+                      <div className="flex h-10 items-center justify-end rounded-md border border-input px-3 font-semibold text-green-500">
                         {getEffectiveOdd(leg).toFixed(3)}
                       </div>
                     </div>
                   </div>
-
-                  {leg.isLay && (
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor={`odd-lay-${leg.id}`}>Odd Lay</Label>
-                        <Input
-                          id={`odd-lay-${leg.id}`}
-                          type="number"
-                          min="1"
-                          step="0.001"
-                          value={leg.oddLay}
-                          onChange={(event) => updateLeg(leg.id, "oddLay", Number(event.target.value))}
-                          className="text-right font-semibold"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor={`commission-${leg.id}`}>Comissao %</Label>
-                        <Input
-                          id={`commission-${leg.id}`}
-                          type="number"
-                          min="0"
-                          max="100"
-                          step="0.01"
-                          value={leg.commission}
-                          onChange={(event) => updateLeg(leg.id, "commission", Number(event.target.value))}
-                          className="text-right font-semibold"
-                        />
-                      </div>
-                    </div>
-                  )}
 
                   <div className="grid gap-3 md:grid-cols-[150px_1fr_170px]">
                     <div className="space-y-2">
