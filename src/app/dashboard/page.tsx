@@ -167,7 +167,6 @@ export default function BetsPage() {
     const [isApplyBankrollReportOpen, setIsApplyBankrollReportOpen] = useState(false);
     const [isApplyingBankrollReport, setIsApplyingBankrollReport] = useState(false);
     const [bankrollReportApplied, setBankrollReportApplied] = useState(false);
-    const [autoBankrollReportAttempted, setAutoBankrollReportAttempted] = useState(false);
     const [isCloseMonthOpen, setIsCloseMonthOpen] = useState(false);
     const [isClosingMonth, setIsClosingMonth] = useState(false);
     const [closedMonths, setClosedMonths] = useState<Record<string, ClosedMonthRecord>>({});
@@ -2000,29 +1999,6 @@ export default function BetsPage() {
         }
     };
 
-    useEffect(() => {
-        if (authLoading || isLoading || isApplyingBankrollReport || autoBankrollReportAttempted) return;
-        if (user?.email?.toLowerCase() !== 'letoxytv@gmail.com') return;
-
-        const currentBankrollSum = bookmakers.reduce(
-            (sum, bookmaker) => sum + (bookmaker.currentBalance ?? bookmaker.initialBankroll ?? 0),
-            0
-        );
-
-        if (Math.abs(currentBankrollSum - BANKROLL_REPORT_TOTAL) <= 0.01) return;
-
-        setAutoBankrollReportAttempted(true);
-        handleApplyBankrollReport();
-    }, [
-        autoBankrollReportAttempted,
-        authLoading,
-        bookmakers,
-        handleApplyBankrollReport,
-        isApplyingBankrollReport,
-        isLoading,
-        user?.email,
-    ]);
-    
     // Export handler
     const handleExport = () => {
         setIsExporting(true);
