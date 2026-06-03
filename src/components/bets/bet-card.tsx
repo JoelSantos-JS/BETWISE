@@ -1,15 +1,32 @@
 "use client";
 
-import type { Bet } from '@/lib/types';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Edit, Trash2, MoreVertical, Calendar, TrendingUp, TrendingDown, Hourglass, DollarSign, ShieldCheck, List, GitCommitHorizontal, Star, Gift, Building, Target, Zap } from 'lucide-react';
-import { Badge } from '../ui/badge';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
-import { cn, formatBRL } from '@/lib/utils';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { calculateSurebet } from '@/lib/surebet-calculator';
+import type { Bet } from "@/lib/types";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Building,
+  Calendar,
+  DollarSign,
+  Edit,
+  Gift,
+  GitCommitHorizontal,
+  Hourglass,
+  List,
+  MoreVertical,
+  ShieldCheck,
+  Star,
+  Target,
+  Trash2,
+  TrendingDown,
+  TrendingUp,
+  Zap,
+} from "lucide-react";
+import { Badge } from "../ui/badge";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../ui/accordion";
+import { cn, formatBRL } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
+import { calculateSurebet } from "@/lib/surebet-calculator";
 
 interface BetCardProps {
   bet: Bet;
@@ -18,283 +35,254 @@ interface BetCardProps {
 }
 
 const statusMap = {
-  pending: { label: 'Pendente', color: 'bg-yellow-500', icon: Hourglass },
-  won: { label: 'Ganha', color: 'bg-green-500', icon: TrendingUp },
-  lost: { label: 'Perdida', color: 'bg-red-500', icon: TrendingDown },
-  cashed_out: { label: 'Cash Out', color: 'bg-blue-500', icon: DollarSign },
-  void: { label: 'Anulada', color: 'bg-gray-500', icon: GitCommitHorizontal },
+  pending: { label: "Pendente", color: "bg-yellow-500", icon: Hourglass },
+  won: { label: "Ganha", color: "bg-green-500", icon: TrendingUp },
+  lost: { label: "Perdida", color: "bg-red-500", icon: TrendingDown },
+  cashed_out: { label: "Cash Out", color: "bg-blue-500", icon: DollarSign },
+  void: { label: "Anulada", color: "bg-gray-500", icon: GitCommitHorizontal },
 };
 
 const scenarioMap = {
-    double_green: { label: 'Duplo Green', icon: Zap },
-    pa_hedge: { label: 'P.A. com Cobertura', icon: ShieldCheck },
-    standard: { label: '', icon: null }
-}
+  double_green: { label: "Duplo Green", icon: Zap },
+  pa_hedge: { label: "P.A. com Cobertura", icon: ShieldCheck },
+  standard: { label: "", icon: null },
+};
 
 export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
   const statusInfo = statusMap[bet.status];
   const scenarioInfo = bet.outcomeScenario ? scenarioMap[bet.outcomeScenario] : null;
-  
-  // Verifica se esta aposta ganha um freebet
-  const earnedFreebet = bet.earnedFreebetValue && bet.earnedFreebetValue > 0;
-  
-  // Debug temporário - verificar dados da aposta
-  if (bet.event?.includes('MIRASSOL')) {
-    console.log('=== DEBUG APOSTA MIRASSOL ===');
-    console.log('Dados completos da aposta:', bet);
-    console.log('earnedFreebetValue:', bet.earnedFreebetValue);
-    console.log('Tipo de earnedFreebetValue:', typeof bet.earnedFreebetValue);
-    console.log('earnedFreebet (calculado):', earnedFreebet);
-    console.log('Status:', bet.status);
-    console.log('Condição completa (earnedFreebet && bet.status === "won"):', earnedFreebet && bet.status === 'won');
-    console.log('=== FIM DEBUG ===');
-  }
-  
-  const surebetRecalculated = (bet.type === 'surebet' || bet.type === 'pa_surebet') && bet.subBets
-    ? calculateSurebet(bet.subBets)
-    : null;
+  const earnedFreebet = Boolean(bet.earnedFreebetValue && bet.earnedFreebetValue > 0);
+
+  const surebetRecalculated =
+    (bet.type === "surebet" || bet.type === "pa_surebet") && bet.subBets
+      ? calculateSurebet(bet.subBets)
+      : null;
 
   const profit = (() => {
-    // Se o lucro final (realizedProfit) foi inserido manualmente, ele tem prioridade MÁXIMA.
-    if (bet.realizedProfit !== null && bet.realizedProfit !== undefined) {
-      return bet.realizedProfit;
-    }
+    if (bet.realizedProfit !== null && bet.realizedProfit !== undefined) return bet.realizedProfit;
+    if (bet.status !== "won" && bet.status !== "lost") return null;
 
-    // Se não há lucro real, calcula com base no status e tipo
-    if (bet.status !== 'won' && bet.status !== 'lost') return null;
-
-    if (bet.type === 'single') {
+    if (bet.type === "single") {
       const stake = bet.stake ?? 0;
       const odds = bet.odds ?? 0;
-      if (bet.status === 'won') return (stake * odds) - stake;
-      if (bet.status === 'lost') return -stake;
+      if (bet.status === "won") return stake * odds - stake;
+      if (bet.status === "lost") return -stake;
       return 0;
     }
 
-    if ((bet.type === 'surebet' || bet.type === 'pa_surebet')) {
-       // Se o status for perdido, a perda é o total apostado
-       if (bet.status === 'lost') {
-         return -(bet.totalStake ?? 0);
-       }
-       // Para surebets ganhas, usa o lucro recalculado (com cashback correto)
-       return surebetRecalculated?.guaranteedProfit ?? null;
+    if (bet.type === "surebet" || bet.type === "pa_surebet") {
+      if (bet.status === "lost") return -(bet.totalStake ?? 0);
+      return surebetRecalculated?.guaranteedProfit ?? null;
     }
 
     return null;
   })();
 
   return (
-    <Card className="flex flex-col h-full overflow-hidden border-l-4" style={{ borderLeftColor: statusInfo.color }}>
-      <CardHeader className="pb-2">
-        <div className="flex justify-between items-start">
-            <div className='flex-1'>
-                 <div className='flex items-center gap-2 flex-wrap'>
-                    {bet.type === 'surebet' && (
-                        <Badge className="bg-teal-500 hover:bg-teal-600 border-transparent text-white gap-1.5">
-                            <ShieldCheck className='w-4 h-4' /> Surebet
-                        </Badge>
-                    )}
-                     {bet.type === 'pa_surebet' && (
-                        <Badge className="bg-orange-500 hover:bg-orange-600 border-transparent text-white gap-1.5">
-                            <Target className='w-4 h-4' /> P.A. Surebet
-                        </Badge>
-                    )}
-                    <Badge variant="secondary">{bet.sport}</Badge>
-                    {bet.bookmaker && bet.type === 'single' && (
-                        <Badge variant="outline" className="gap-1.5"><Building className="w-3 h-3" /> {bet.bookmaker}</Badge>
-                    )}
-                    {bet.type === 'single' && bet.isBoostedBet && (
-                        <Badge className="bg-yellow-500 hover:bg-yellow-600 border-transparent text-black gap-1.5">
-                            <Zap className="w-3 h-3" /> Aumentada
-                        </Badge>
-                    )}
-                    {bet.accountName && (
-                        <Badge variant="secondary">{bet.accountName}</Badge>
-                    )}
-                    {bet.accountCpf && (
-                        <Badge variant="secondary">{bet.accountCpf}</Badge>
-                    )}
-                    {scenarioInfo && scenarioInfo.icon && (
-                        <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger>
-                                    <Badge variant="default" className="gap-1.5">
-                                        <scenarioInfo.icon className="w-4 h-4" /> {scenarioInfo.label}
-                                    </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    <p>Esta aposta foi resolvida como: {scenarioInfo.label}</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-                    )}
-                 </div>
-                 <CardTitle className="text-lg font-bold mt-2">{bet.event}</CardTitle>
+    <Card className="flex h-full flex-col overflow-hidden border-l-4" style={{ borderLeftColor: statusInfo.color }}>
+      <CardHeader className="p-3 pb-2 sm:p-4 sm:pb-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {bet.type === "surebet" && (
+                <Badge className="gap-1.5 border-transparent bg-teal-500 text-white hover:bg-teal-600">
+                  <ShieldCheck className="h-3.5 w-3.5" /> Surebet
+                </Badge>
+              )}
+              {bet.type === "pa_surebet" && (
+                <Badge className="gap-1.5 border-transparent bg-orange-500 text-white hover:bg-orange-600">
+                  <Target className="h-3.5 w-3.5" /> P.A. Surebet
+                </Badge>
+              )}
+              <Badge variant="secondary">{bet.sport}</Badge>
+              {bet.bookmaker && bet.type === "single" && (
+                <Badge variant="outline" className="max-w-full gap-1.5 truncate">
+                  <Building className="h-3 w-3 shrink-0" /> <span className="truncate">{bet.bookmaker}</span>
+                </Badge>
+              )}
+              {bet.type === "single" && bet.isBoostedBet && (
+                <Badge className="gap-1.5 border-transparent bg-yellow-500 text-black hover:bg-yellow-600">
+                  <Zap className="h-3 w-3" /> Aumentada
+                </Badge>
+              )}
+              {bet.accountName && <Badge variant="secondary" className="max-w-full truncate">{bet.accountName}</Badge>}
+              {bet.accountCpf && <Badge variant="secondary">{bet.accountCpf}</Badge>}
+              {scenarioInfo && scenarioInfo.icon && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <Badge variant="default" className="gap-1.5">
+                        <scenarioInfo.icon className="h-3.5 w-3.5" /> {scenarioInfo.label}
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Esta aposta foi resolvida como: {scenarioInfo.label}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
-             <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon">
-                        <MoreVertical />
-                        <span className="sr-only">Mais opções</span>
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={onEdit}>
-                        <Edit className="mr-2" /> Editar
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive focus:bg-destructive/10">
-                        <Trash2 className="mr-2" /> Excluir
-                    </DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
+            <CardTitle className="mt-2 line-clamp-2 text-base font-bold leading-snug sm:text-lg">
+              {bet.event}
+            </CardTitle>
+          </div>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                <MoreVertical className="h-4 w-4" />
+                <span className="sr-only">Mais opcoes</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onEdit}>
+                <Edit className="mr-2 h-4 w-4" /> Editar
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onDelete} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
+                <Trash2 className="mr-2 h-4 w-4" /> Excluir
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </CardHeader>
-      <CardContent className="flex-1 space-y-4">
-        {bet.type === 'single' ? (
-            <>
-                <div>
-                    <p className="text-sm font-semibold text-primary">{bet.betType}</p>
-                    <p className="text-xs text-muted-foreground">Tipo de Aposta</p>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                        <p className="font-bold">{bet.stake?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
-                        <p className="text-xs text-muted-foreground">Apostado (Stake)</p>
-                    </div>
-                    <div>
-                        <p className="font-bold">@{bet.odds?.toFixed(2)}</p>
-                        <p className="text-xs text-muted-foreground">Odds</p>
-                    </div>
-                </div>
-            </>
+
+      <CardContent className="flex-1 space-y-3 p-3 pt-1 sm:space-y-4 sm:p-4 sm:pt-2">
+        {bet.type === "single" ? (
+          <>
+            <div>
+              <p className="line-clamp-2 text-sm font-semibold text-primary">{bet.betType}</p>
+              <p className="text-xs text-muted-foreground">Tipo de Aposta</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <MetricBox label="Apostado (Stake)" value={formatBRL(Number(bet.stake ?? 0))} />
+              <MetricBox label="Odds" value={`@${(bet.odds ?? 0).toFixed(2)}`} />
+            </div>
+          </>
         ) : (
-            <>
-                {(() => {
-                  const totalStake = surebetRecalculated?.totalStake ?? bet.totalStake ?? 0;
-                  const guaranteedProfit = surebetRecalculated?.guaranteedProfit ?? bet.guaranteedProfit ?? 0;
-                  const retornoTotal = totalStake + guaranteedProfit;
-                  const displayedProfit = (bet.status === 'won' && bet.realizedProfit !== null && bet.realizedProfit !== undefined)
-                    ? bet.realizedProfit
-                    : guaranteedProfit;
+          <>
+            {(() => {
+              const totalStake = surebetRecalculated?.totalStake ?? bet.totalStake ?? 0;
+              const guaranteedProfit = surebetRecalculated?.guaranteedProfit ?? bet.guaranteedProfit ?? 0;
+              const retornoTotal = totalStake + guaranteedProfit;
+              const displayedProfit =
+                bet.status === "won" && bet.realizedProfit !== null && bet.realizedProfit !== undefined
+                  ? bet.realizedProfit
+                  : guaranteedProfit;
+              const roi = surebetRecalculated?.profitPercentage ?? bet.profitPercentage ?? 0;
 
-                  const roi = surebetRecalculated?.profitPercentage ?? bet.profitPercentage ?? 0;
+              return (
+                <div className="grid grid-cols-2 gap-2 text-center text-sm">
+                  <MetricBox
+                    label="Retorno Total"
+                    value={formatBRL(retornoTotal)}
+                    valueClassName={retornoTotal >= totalStake ? "text-green-500" : "text-destructive"}
+                  />
+                  <MetricBox
+                    label={earnedFreebet && bet.status === "won" ? "Freebet Ganha" : displayedProfit === bet.realizedProfit ? "Lucro Final" : "Lucro Garantido"}
+                    value={earnedFreebet && bet.status === "won" ? formatBRL(bet.earnedFreebetValue ?? 0) : formatBRL(displayedProfit)}
+                    valueClassName={displayedProfit >= 0 ? "text-green-500" : "text-destructive"}
+                  />
+                  <MetricBox label="Total Apostado" value={formatBRL(totalStake)} valueClassName="text-muted-foreground" />
+                  <MetricBox
+                    label="Retorno (%)"
+                    value={Number.isFinite(roi) ? `${roi.toFixed(2)}%` : "N/A"}
+                    valueClassName={roi >= 0 ? "text-green-500" : "text-destructive"}
+                  />
+                </div>
+              );
+            })()}
 
-                  return (
-                    <div className="grid grid-cols-2 gap-2 text-sm text-center">
-                      <div>
-                        <p className={cn("font-bold", retornoTotal >= totalStake ? "text-green-500" : "text-destructive")}>
-                          {formatBRL(retornoTotal)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">Retorno Total</p>
-                      </div>
-                      <div>
-                        <p className={cn("font-bold", displayedProfit >= 0 ? "text-green-500" : "text-destructive")}>
-                          {earnedFreebet && bet.status === 'won' ? (
-                            <span className="flex items-center gap-1">
-                              <Gift className="w-4 h-4 text-yellow-500" />
-                              {formatBRL(bet.earnedFreebetValue ?? 0)}
+            {bet.subBets && bet.subBets.length > 0 && (
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="sub-bets">
+                  <AccordionTrigger className="py-2 text-sm">
+                    <List className="mr-2 h-4 w-4" /> Ver {bet.subBets.length} Apostas
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <ul className="mt-2 space-y-2 text-sm">
+                      {bet.subBets.map((sub) => (
+                        <li key={sub.id} className="rounded-md bg-secondary/50 p-2">
+                          <div className="flex flex-col gap-1 font-semibold sm:flex-row sm:items-center sm:justify-between">
+                            <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+                              {sub.isFreebet && <Star className="h-4 w-4 text-yellow-500" />}
+                              <span className="truncate">{sub.bookmaker}</span>
+                              {sub.hasPa === false && (
+                                <Badge variant="outline" className="text-xs text-orange-500 border-orange-500/50">
+                                  Sem P.A.
+                                </Badge>
+                              )}
+                              {sub.hasPa === true && (
+                                <Badge variant="outline" className="text-xs text-green-500 border-green-500/50">
+                                  P.A.
+                                </Badge>
+                              )}
                             </span>
-                          ) : formatBRL(displayedProfit)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {earnedFreebet && bet.status === 'won' ? 'Freebet Ganha' : displayedProfit === bet.realizedProfit ? 'Lucro Final' : 'Lucro Garantido'}
+                            <Badge variant="outline" className="w-fit">@{typeof sub.odds === "number" ? sub.odds.toFixed(2) : "--"}</Badge>
+                          </div>
+                          <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">{sub.betType}</div>
+                          <div className="mt-1 text-right font-bold text-primary">
+                            {formatBRL(Number(sub.stake || 0))}
+                            {sub.isFreebet && <span className="text-xs font-normal text-muted-foreground"> (Freebet)</span>}
+                            {sub.cashbackValue && sub.cashbackValue > 0 && (
+                              <span className="ml-2 text-xs font-normal text-purple-500">
+                                cashback {sub.cashbackValue}{sub.cashbackMode === "percent" ? "%" : ""}
+                              </span>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                    {surebetRecalculated && (surebetRecalculated.minCashback || 0) > 0 && (
+                      <div className="mt-4 rounded-md border border-purple-500/20 bg-purple-500/10 p-2 text-sm">
+                        <p className="text-muted-foreground">Cashback Extraivel:</p>
+                        <p className="font-bold text-purple-500">
+                          {surebetRecalculated.minCashback === surebetRecalculated.maxCashback
+                            ? formatBRL(surebetRecalculated.minCashback)
+                            : `${formatBRL(surebetRecalculated.minCashback)} ~ ${formatBRL(surebetRecalculated.maxCashback)}`}
                         </p>
                       </div>
-                      <div>
-                        <p className="font-bold text-muted-foreground">{formatBRL(totalStake)}</p>
-                        <p className="text-xs text-muted-foreground">Total Apostado</p>
-                      </div>
-                      <div>
-                        <p className={cn("font-bold", roi >= 0 ? "text-green-500" : "text-destructive")}>
-                          {isFinite(roi) ? `${roi.toFixed(2)}%` : 'N/A'}
-                        </p>
-                        <p className="text-xs text-muted-foreground">Retorno (%)</p>
-                      </div>
-                    </div>
-                  );
-                })()}
-                {bet.subBets && bet.subBets.length > 0 && (
-                    <Accordion type="single" collapsible className="w-full">
-                        <AccordionItem value="sub-bets">
-                            <AccordionTrigger>
-                                <List className='w-4 h-4 mr-2'/> Ver {bet.subBets.length} Apostas
-                            </AccordionTrigger>
-                            <AccordionContent>
-                                <ul className='space-y-2 text-sm mt-2'>
-                                    {bet.subBets.map(sub => (
-                                        <li key={sub.id} className="p-2 bg-secondary/50 rounded-md">
-                                            <div className='flex justify-between items-center font-semibold'>
-                                                <span className="flex items-center gap-1.5">
-                                                    {sub.isFreebet && <Star className="w-4 h-4 text-yellow-500" />}
-                                                    {sub.bookmaker}
-                                                    {sub.hasPa === false && (
-                                                        <Badge variant="outline" className="text-xs text-orange-500 border-orange-500/50">Sem P.A.</Badge>
-                                                    )}
-                                                    {sub.hasPa === true && (
-                                                        <Badge variant="outline" className="text-xs text-green-500 border-green-500/50">P.A.</Badge>
-                                                    )}
-                                                </span>
-                                                <Badge variant="outline">@{typeof sub.odds === 'number' ? sub.odds.toFixed(2) : '--'}</Badge>
-                                            </div>
-                                            <div className='text-xs text-muted-foreground'>{sub.betType}</div>
-                                            <div className='text-right font-bold text-primary mt-1'>
-                                                {/* DEBUG - remover depois */}
-                                                {(() => { console.log('sub.stake raw:', sub.stake, typeof sub.stake); return null; })()}
-                                                {formatBRL(Number(sub.stake || 0))}
-                                                {sub.isFreebet && <span className='text-xs font-normal text-muted-foreground'> (Freebet)</span>}
-                                                {sub.cashbackValue && sub.cashbackValue > 0 && (
-                                                    <span className='text-xs font-normal text-purple-500 ml-2'>
-                                                        💜 {sub.cashbackValue}{sub.cashbackMode === 'percent' ? '%' : ''} cashback
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </li>
-                                    ))}
-                                </ul>
-                                {surebetRecalculated && (surebetRecalculated.minCashback || 0) > 0 && (
-                                    <div className='mt-4 p-2 bg-purple-500/10 border border-purple-500/20 rounded-md text-sm'>
-                                        <p className='text-muted-foreground'>Cashback Extraível:</p>
-                                        <p className='font-bold text-purple-500'>
-                                            {surebetRecalculated.minCashback === surebetRecalculated.maxCashback
-                                                ? surebetRecalculated.minCashback.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                                                : `${surebetRecalculated.minCashback.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} ~ ${surebetRecalculated.maxCashback.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
-                                            }
-                                        </p>
-                                    </div>
-                                )}
-                            </AccordionContent>
-                        </AccordionItem>
-                    </Accordion>
-                )}
-            </>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            )}
+          </>
         )}
 
         {bet.notes && (
-            <div>
-                <p className="text-sm text-muted-foreground bg-secondary/50 p-3 rounded-md whitespace-pre-wrap">{bet.notes}</p>
-            </div>
+          <p className="whitespace-pre-wrap rounded-md bg-secondary/50 p-3 text-sm text-muted-foreground">{bet.notes}</p>
         )}
       </CardContent>
-      <CardFooter className="p-4 bg-secondary/30 flex justify-between items-center mt-auto">
+
+      <CardFooter className="mt-auto flex flex-col items-stretch gap-2 bg-secondary/30 p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
         <div className="flex items-center gap-2 text-sm">
-             <Calendar className="w-4 h-4 text-muted-foreground"/>
-             <span>{new Date(bet.date).toLocaleDateString('pt-BR')}</span>
+          <Calendar className="h-4 w-4 text-muted-foreground" />
+          <span>{new Date(bet.date).toLocaleDateString("pt-BR")}</span>
         </div>
-         <Badge className={`border-transparent text-white gap-1.5 ${statusInfo.color}`}>
-                <statusInfo.icon className="w-4 h-4" />
-                <span>{statusInfo.label}</span>
-                {earnedFreebet && bet.status === 'won' ? (
-                    <span className="font-bold text-yellow-300 flex items-center gap-1">
-                        (<Gift className="w-3 h-3" /> {bet.earnedFreebetValue?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})
-                    </span>
-                ) : profit !== null && (
-                     <span className={cn("font-bold", profit < 0 ? "text-red-300" : "text-green-300")}>
-                        ({profit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})
-                    </span>
-                )}
+        <Badge className={`min-h-8 justify-center gap-1.5 border-transparent text-white ${statusInfo.color}`}>
+          <statusInfo.icon className="h-4 w-4" />
+          <span>{statusInfo.label}</span>
+          {earnedFreebet && bet.status === "won" ? (
+            <span className="flex items-center gap-1 font-bold text-yellow-300">
+              (<Gift className="h-3 w-3" /> {formatBRL(bet.earnedFreebetValue ?? 0)})
+            </span>
+          ) : profit !== null ? (
+            <span className={cn("font-bold", profit < 0 ? "text-red-300" : "text-green-300")}>
+              ({formatBRL(profit)})
+            </span>
+          ) : null}
         </Badge>
       </CardFooter>
     </Card>
+  );
+}
+
+function MetricBox({ label, value, valueClassName }: { label: string; value: string; valueClassName?: string }) {
+  return (
+    <div className="rounded-md bg-secondary/30 p-2">
+      <p className={cn("font-bold", valueClassName)}>{value}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
+    </div>
   );
 }

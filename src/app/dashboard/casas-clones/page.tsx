@@ -257,10 +257,10 @@ export default function CasasClonesPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 sm:space-y-5">
       <div className="space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight">Casas e Clones</h2>
-        <p className="text-muted-foreground">
+        <h2 className="text-2xl font-bold tracking-tight md:text-3xl">Casas e Clones</h2>
+        <p className="text-sm text-muted-foreground md:text-base">
           Lista atualizada por grupo, com logos quando disponiveis e acesso direto as casas.
         </p>
         <p className="text-xs text-muted-foreground">
@@ -269,7 +269,7 @@ export default function CasasClonesPage() {
       </div>
 
       <Card>
-        <CardContent className="space-y-4 p-4">
+        <CardContent className="space-y-3 p-3 sm:space-y-4 sm:p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
             <div className="relative w-full lg:max-w-sm">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -294,7 +294,7 @@ export default function CasasClonesPage() {
               ) : null}
             </div>
 
-            <div className="grid flex-1 grid-cols-2 gap-2 md:grid-cols-5">
+            <div className="grid flex-1 grid-cols-1 gap-2 min-[420px]:grid-cols-2 md:grid-cols-5">
               <FilterButton label="Todas" count={stats.total} active={!activeFilter} onClick={() => setActiveFilter(null)} />
               <FilterButton
                 label="Risco"
@@ -339,7 +339,7 @@ export default function CasasClonesPage() {
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
             <StatCard label="Casas" value={stats.total} />
             <StatCard label="Grupos" value={stats.groups} />
             <StatCard label="Exibindo" value={stats.visible} />
@@ -358,13 +358,13 @@ export default function CasasClonesPage() {
       ) : null}
 
       {loading ? (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 8 }).map((_, index) => (
             <Skeleton key={index} className="h-56 rounded-lg" />
           ))}
         </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
           {visibleGroups.map((group) => (
             <GroupColumn key={group.groupId} group={group} />
           ))}
@@ -395,7 +395,7 @@ function FilterButton({
       variant={active ? "default" : "outline"}
       onClick={onClick}
       className={cn(
-        "h-auto justify-start gap-2 px-3 py-2",
+        "h-auto min-h-10 justify-start gap-2 px-3 py-2",
         active && tone === "risk" && "bg-red-600 hover:bg-red-700",
         active && tone === "odds" && "bg-green-600 hover:bg-green-700",
         active && tone === "payment" && "bg-blue-600 hover:bg-blue-700",
@@ -411,9 +411,9 @@ function FilterButton({
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-md border bg-muted/30 p-3">
+    <div className="rounded-md border bg-muted/30 p-2.5 sm:p-3">
       <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 text-xl font-bold">{value}</p>
+      <p className="mt-1 text-lg font-bold sm:text-xl">{value}</p>
     </div>
   );
 }
@@ -451,12 +451,12 @@ function GroupColumn({ group }: { group: GroupedBookmakers }) {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <CardTitle
-              className="truncate text-xl font-black uppercase leading-tight tracking-normal"
+              className="truncate text-lg font-black uppercase leading-tight tracking-normal sm:text-xl"
               style={{ color: group.titleColor || color }}
             >
               {group.groupId}
             </CardTitle>
-            <p className="mt-1 text-sm font-semibold text-foreground/90">
+            <p className="mt-1 line-clamp-2 text-xs font-semibold text-foreground/90 sm:text-sm">
               {group.houses.length} casa{group.houses.length === 1 ? "" : "s"}
               {providers.length ? ` - ${providers.join(" / ")}` : ""}
             </p>
@@ -478,7 +478,7 @@ function GroupColumn({ group }: { group: GroupedBookmakers }) {
         </div>
       </CardHeader>
 
-      <CardContent className="grid grid-cols-2 gap-2 p-3">
+      <CardContent className="grid grid-cols-2 gap-2 p-2.5 sm:p-3">
         {group.houses.map((house) => (
           <BookmakerLogoCard key={house.id} house={house} />
         ))}
@@ -534,7 +534,7 @@ function BookmakerLogoCard({ house }: { house: BookmakerGroupRow }) {
       <ExternalLink className="absolute right-1.5 top-1.5 h-3 w-3 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
 
       <div
-        className="flex h-10 w-full items-center justify-center rounded border bg-background/50 px-1"
+        className="flex h-9 w-full items-center justify-center rounded border bg-background/50 px-1 sm:h-10"
         style={!hasLogo ? { borderColor: `${color}55`, backgroundColor: `${color}18` } : undefined}
       >
         {hasLogo ? (

@@ -2128,7 +2128,7 @@ export default function BetsPage() {
         const list = showAllRaw ? bets : filteredBets;
         if (list.length > 0) {
             return (
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                 <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {list.map(bet => (
                         <BetCard 
                             key={bet.id} 
@@ -2142,8 +2142,8 @@ export default function BetsPage() {
         }
         
         return (
-            <div className="text-center py-20 bg-muted rounded-lg col-span-full">
-                <h3 className="text-2xl font-bold">Nenhuma Aposta Encontrada</h3>
+            <div className="text-center py-12 bg-muted rounded-lg col-span-full sm:py-20">
+                <h3 className="text-xl font-bold sm:text-2xl">Nenhuma Aposta Encontrada</h3>
                 <p className="text-muted-foreground mt-2 mb-6">Não há apostas com este status. Adicione uma nova aposta ou mude o filtro.</p>
                 <Button size="lg" onClick={() => handleOpenBetForm()}>
                     <PlusCircle className="mr-2"/>
@@ -2155,17 +2155,17 @@ export default function BetsPage() {
 
     return (
         <>
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+            <div className="flex flex-col gap-3 mb-6 md:mb-8 md:flex-row md:items-center md:justify-between md:gap-4">
                 <div className="max-w-2xl">
-                    <h2 className="text-3xl font-bold mb-1 flex items-center gap-2">
-                        <BarChart className="w-8 h-8 text-primary" />
+                    <h2 className="text-2xl font-bold mb-1 flex items-center gap-2 md:text-3xl">
+                        <BarChart className="w-6 h-6 text-primary md:w-8 md:h-8" />
                         Painel de Controle
                     </h2>
-                    <p className="text-muted-foreground">
+                    <p className="text-sm text-muted-foreground md:text-base">
                         Gerencie suas apostas, analise riscos e acompanhe seus resultados.
                     </p>
                 </div>
-                <div className='flex items-center gap-4'>
+                <div className='grid w-full grid-cols-1 gap-2 sm:grid-cols-2 md:flex md:w-auto md:items-center md:gap-4'>
                      <Button size="lg" onClick={handleExport} variant="outline" disabled={isExporting} className="w-full md:w-auto">
                         {isExporting ? <Loader2 className="animate-spin mr-2" /> : <FileDown className="mr-2"/>}
                         {isExporting ? 'Exportando...' : 'Exportar para Excel'}
@@ -2375,7 +2375,7 @@ export default function BetsPage() {
                 </div>
              )}
 
-            <div className="mb-6">
+            <div className="hidden">
                 <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
                     <Zap className="h-5 w-5 text-yellow-500" />
                     Relatorio de Apostas Aumentadas
@@ -2577,11 +2577,11 @@ export default function BetsPage() {
 
              {/* Filters Section */}
              <div className="mb-6">
-                <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2 md:text-xl md:mb-4">
                     <Filter className="h-5 w-5" />
                     Filtros
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+                <div className="grid grid-cols-1 gap-3 rounded-lg bg-muted/50 p-3 sm:p-4 md:grid-cols-2 xl:grid-cols-4">
                     {/* Date Filter */}
                     <div className="space-y-2">
                         <Label htmlFor="date-filter" className="flex items-center gap-2">
@@ -2604,7 +2604,7 @@ export default function BetsPage() {
                         </Select>
                         
                         {dateFilter === 'specific_month' && (
-                            <div className="grid grid-cols-2 gap-2 mt-2">
+                            <div className="grid grid-cols-1 gap-2 mt-2 sm:grid-cols-2">
                                 <div>
                                     <Label className="text-xs">Mês</Label>
                                     <Select
@@ -2644,7 +2644,7 @@ export default function BetsPage() {
                             </div>
                         )}
                         {dateFilter === 'custom' && (
-                            <div className="grid grid-cols-2 gap-2 mt-2">
+                            <div className="grid grid-cols-1 gap-2 mt-2 sm:grid-cols-2">
                                 <div>
                                     <Label htmlFor="start-date" className="text-xs">Data inicial</Label>
                                     <Input
@@ -2672,7 +2672,7 @@ export default function BetsPage() {
                         <Label className="flex items-center gap-2">
                             Dias da Semana
                         </Label>
-                        <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+                        <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
                             {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map((label, idx) => (
                                 <div key={label} className="flex items-center gap-1">
                                     <Checkbox
@@ -2689,7 +2689,7 @@ export default function BetsPage() {
                                 </div>
                             ))}
                         </div>
-                        <div className="flex gap-2 mt-2">
+                        <div className="grid grid-cols-1 gap-2 mt-2 sm:grid-cols-3">
                             <Button variant="outline" size="sm" onClick={() => setDayFilter([1,2,3,4,5])}>Dias úteis</Button>
                             <Button variant="outline" size="sm" onClick={() => setDayFilter([0,6])}>Finais de semana</Button>
                             <Button variant="ghost" size="sm" onClick={() => setDayFilter([])}>Todos</Button>
@@ -2715,7 +2715,7 @@ export default function BetsPage() {
                         </Select>
                         
                         {profitFilter === 'range' && (
-                            <div className="grid grid-cols-2 gap-2 mt-2">
+                            <div className="grid grid-cols-1 gap-2 mt-2 sm:grid-cols-2">
                                 <div>
                                     <Label htmlFor="min-profit" className="text-xs">Lucro mínimo</Label>
                                     <Input
@@ -2781,21 +2781,68 @@ export default function BetsPage() {
                 </div>
              </div>
 
+            <div className="mb-6">
+                <h3 className="text-lg font-semibold mb-3 flex items-center gap-2 md:text-xl md:mb-4">
+                    <Zap className="h-5 w-5 text-yellow-500" />
+                    Relatorio de Apostas Aumentadas
+                </h3>
+                <div className="grid grid-cols-1 gap-3 mb-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                    <SummaryCard title="Aumentadas" value={boostedBetStats.count} icon={Zap} />
+                    <SummaryCard title="Saldo das Aumentadas" value={boostedBetStats.totalNet} icon={boostedBetStats.totalNet >= 0 ? TrendingUp : TrendingDown} isCurrency valueClassName={boostedBetStats.totalNet >= 0 ? "text-green-500" : "text-destructive"} />
+                    <SummaryCard title="Lucro das Aumentadas" value={boostedBetStats.totalProfit} icon={TrendingUp} isCurrency valueClassName={boostedBetStats.totalProfit >= 0 ? "text-green-500" : "text-destructive"} />
+                    <SummaryCard title="Perdas das Aumentadas" value={boostedBetStats.totalLoss} icon={TrendingDown} isCurrency valueClassName={boostedBetStats.totalLoss > 0 ? "text-destructive" : ""} />
+                    <SummaryCard title="Apostado em Aumentadas" value={boostedBetStats.totalStaked} icon={Wallet} isCurrency />
+                    <SummaryCard title="ROI das Aumentadas" value={boostedBetStats.roi} icon={BarChart} isPercentage valueClassName={boostedBetStats.roi >= 0 ? "text-green-500" : "text-destructive"} />
+                </div>
+                <Card>
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-base">Ultimas apostas aumentadas</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {boostedBetStats.recent.length > 0 ? (
+                            <div className="space-y-2">
+                                {boostedBetStats.recent.map((bet) => {
+                                    const net = calcBetNet(bet);
+                                    return (
+                                        <div key={bet.id} className="flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between">
+                                            <div className="min-w-0">
+                                                <div className="font-semibold truncate">{bet.event}</div>
+                                                <div className="text-xs text-muted-foreground truncate">
+                                                    {format(new Date(bet.date), 'dd/MM/yyyy')} · {bet.bookmaker ?? 'Sem casa'} · {bet.betType ?? 'Sem mercado'}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-4 sm:justify-end">
+                                                <div className="text-sm text-muted-foreground">{betStatusLabels[bet.status]}</div>
+                                                <div className={net >= 0 ? "font-bold text-green-500" : "font-bold text-destructive"}>
+                                                    {net.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="text-sm text-muted-foreground">Nenhuma aposta aumentada encontrada neste recorte.</div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
+
             <Tabs defaultValue="bets" className="w-full">
-                <TabsList className="w-full mb-6 overflow-x-auto whitespace-nowrap flex gap-2">
+                <TabsList className="mb-4 flex w-full justify-start gap-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mb-6">
                     <TabsTrigger value="bets">Minhas Apostas</TabsTrigger>
                     <TabsTrigger value="stats">Estatísticas</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="bets">
-                    <h3 className="text-2xl font-bold mb-4">Minhas Apostas</h3>
+                    <h3 className="text-xl font-bold mb-3 md:text-2xl md:mb-4">Minhas Apostas</h3>
                     {lastSavedId && (
                         <div className="mb-4 text-xs text-muted-foreground">
                             Última aposta salva: <span className="font-mono">{lastSavedId}</span> — {lastSavedPresent == null ? 'verificando...' : lastSavedPresent ? 'encontrada' : 'não encontrada'}
                         </div>
                     )}
                     <Tabs value={filterStatus} onValueChange={setFilterStatus} className="w-full">
-                        <TabsList className="w-full mb-6 overflow-x-auto whitespace-nowrap flex gap-2">
+                        <TabsList className="mb-4 flex w-full justify-start gap-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:mb-6">
                             <TabsTrigger value="all">Todas</TabsTrigger>
                             <TabsTrigger value="pending">Em Andamento</TabsTrigger>
                             <TabsTrigger value="won">Ganhos</TabsTrigger>
@@ -2812,11 +2859,11 @@ export default function BetsPage() {
                 </TabsContent>
 
                 <TabsContent value="stats">
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <h3 className="text-2xl font-bold">Estatísticas das Apostas</h3>
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="outline" className="gap-2">
+                                <Button variant="outline" className="w-full gap-2 sm:w-auto">
                                     <FileDown className="w-4 h-4" />
                                     Exportar Excel
                                 </Button>
@@ -2839,11 +2886,11 @@ export default function BetsPage() {
                         </DropdownMenu>
                     </div>
                     <Card className="mb-6">
-                        <CardHeader>
+                        <CardHeader className="p-4 pb-2 sm:p-6 sm:pb-3">
                             <CardTitle>Filtros e Ordenação</CardTitle>
                         </CardHeader>
-                        <CardContent>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <CardContent className="p-4 pt-2 sm:p-6 sm:pt-3">
+                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
                                 <div className="space-y-2">
                                     <Label>Tipo</Label>
                                     <Select value={statsTypeFilter} onValueChange={setStatsTypeFilter}>
@@ -2969,7 +3016,7 @@ export default function BetsPage() {
                             </div>
                         </CardContent>
                     </Card>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 lg:grid-cols-4">
                         <SummaryCard title="Total Apostado" value={statsSummary.totalStaked} icon={Wallet} isCurrency />
                         <SummaryCard title="Saldo Final" value={statsSummary.totalNet} icon={Calculator} isCurrency valueClassName={statsSummary.totalNet >= 0 ? "text-green-500" : "text-destructive"} />
                         <SummaryCard title="Lucro Total" value={statsSummary.totalProfit} icon={TrendingUp} isCurrency valueClassName={statsSummary.totalProfit >= 0 ? "text-green-500" : "text-destructive"} />
@@ -2981,13 +3028,13 @@ export default function BetsPage() {
                     </div>
 
                     <Card className="mb-6">
-                        <CardHeader>
+                        <CardHeader className="p-4 pb-2 sm:p-6 sm:pb-3">
                             <CardTitle>Distribuição por ROI</CardTitle>
                         </CardHeader>
-                        <CardContent>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <CardContent className="p-4 pt-2 sm:p-6 sm:pt-3">
+                            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
                                 {statsSummary.roiBuckets.map(bucket => (
-                                    <div key={bucket.key} className="flex items-center justify-between rounded-md border p-3">
+                                    <div key={bucket.key} className="flex items-center justify-between gap-3 rounded-md border p-3">
                                         <div className="text-sm font-medium">{bucket.label}</div>
                                         <div className="text-sm text-muted-foreground">
                                             {bucket.count} ({bucket.percent.toFixed(1)}%)
@@ -2999,40 +3046,41 @@ export default function BetsPage() {
                     </Card>
 
                     <Card>
-                        <CardHeader>
+                        <CardHeader className="p-4 pb-2 sm:p-6 sm:pb-3">
                             <CardTitle>Todos os Jogos Apostados</CardTitle>
+                            <div className="text-xs text-muted-foreground sm:hidden">Arraste a tabela para ver mais colunas.</div>
                         </CardHeader>
-                        <CardContent>
-                            <Table>
+                        <CardContent className="p-0">
+                            <Table className="min-w-[680px]">
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Data</TableHead>
-                                        <TableHead>Evento</TableHead>
-                                        <TableHead className="hidden md:table-cell">Tipo</TableHead>
-                                        <TableHead className="hidden lg:table-cell">Status</TableHead>
-                                        <TableHead className="text-right">Stake</TableHead>
+                                        <TableHead className="h-10 px-3">Data</TableHead>
+                                        <TableHead className="h-10 px-3">Evento</TableHead>
+                                        <TableHead className="h-10 px-3">Tipo</TableHead>
+                                        <TableHead className="h-10 px-3">Status</TableHead>
+                                        <TableHead className="h-10 px-3 text-right">Stake</TableHead>
                                         <TableHead className="text-right">Lucro/Prejuízo</TableHead>
-                                        <TableHead className="text-right">ROI</TableHead>
+                                        <TableHead className="h-10 px-3 text-right">ROI</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {statsRowsFiltered.length > 0 ? (
                                         statsRowsFiltered.map(({ bet, staked, net, roi }) => (
                                             <TableRow key={bet.id}>
-                                                <TableCell>{format(new Date(bet.date), 'dd/MM/yyyy')}</TableCell>
-                                                <TableCell>
-                                                    <div className="font-medium">{bet.event}</div>
+                                                <TableCell className="px-3 py-3 whitespace-nowrap">{format(new Date(bet.date), 'dd/MM/yyyy')}</TableCell>
+                                                <TableCell className="px-3 py-3">
+                                                    <div className="max-w-[260px] truncate font-medium">{bet.event}</div>
                                                     <div className="text-xs text-muted-foreground">{bet.betType ?? '—'}</div>
                                                 </TableCell>
-                                                <TableCell className="hidden md:table-cell">{getBetTypeLabel(bet.type)}</TableCell>
-                                                <TableCell className="hidden lg:table-cell">{betStatusLabels[bet.status]}</TableCell>
-                                                <TableCell className="text-right">
+                                                <TableCell className="px-3 py-3 whitespace-nowrap">{getBetTypeLabel(bet.type)}</TableCell>
+                                                <TableCell className="px-3 py-3 whitespace-nowrap">{betStatusLabels[bet.status]}</TableCell>
+                                                <TableCell className="px-3 py-3 text-right whitespace-nowrap">
                                                     {staked.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                                 </TableCell>
-                                                <TableCell className={`text-right ${net >= 0 ? "text-green-500" : "text-destructive"}`}>
+                                                <TableCell className={`px-3 py-3 text-right whitespace-nowrap ${net >= 0 ? "text-green-500" : "text-destructive"}`}>
                                                     {net.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                                 </TableCell>
-                                                <TableCell className={`text-right ${roi >= 0 ? "text-green-500" : "text-destructive"}`}>
+                                                <TableCell className={`px-3 py-3 text-right whitespace-nowrap ${roi >= 0 ? "text-green-500" : "text-destructive"}`}>
                                                     {roi.toFixed(2)}%
                                                 </TableCell>
                                             </TableRow>
@@ -3055,7 +3103,7 @@ export default function BetsPage() {
             <Dialog open={isBetFormOpen} onOpenChange={isOpen => {
                 if(!isOpen) { setIsBetFormOpen(false); setBetToEdit(null); }
             }}>
-                <DialogContent className="max-w-2xl p-0">
+                <DialogContent className="max-h-[96svh] w-[calc(100vw-0.75rem)] max-w-2xl overflow-hidden p-0 sm:w-full">
                     <BetForm 
                         onSave={handleSaveBet}
                         betToEdit={betToEdit}

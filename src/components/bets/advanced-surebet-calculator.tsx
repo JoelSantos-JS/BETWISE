@@ -109,7 +109,7 @@ const createLeg = (index: number): CalculatorLeg => ({
 });
 
 export function AdvancedSurebetCalculator() {
-  const [legs, setLegs] = useState<CalculatorLeg[]>([createLeg(1), createLeg(2), createLeg(3)]);
+  const [legs, setLegs] = useState<CalculatorLeg[]>([createLeg(1), createLeg(2)]);
   const [calculationMode, setCalculationMode] = useState<"auto" | "manual">("auto");
   const [totalInvestment, setTotalInvestment] = useState(200);
 
@@ -232,14 +232,14 @@ export function AdvancedSurebetCalculator() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-4">
-      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
+    <div className="mx-auto max-w-6xl space-y-3 sm:space-y-4">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-4">
           <Card>
-            <CardContent className="grid gap-4 p-4 md:grid-cols-[auto_220px_auto] md:items-end">
+            <CardContent className="grid gap-3 p-3 sm:grid-cols-[auto_180px_auto] sm:items-end sm:p-4">
               <div className="space-y-2">
                 <Label>Modo de calculo</Label>
-                <div className="flex rounded-md border border-border p-1">
+                <div className="grid grid-cols-2 rounded-md border border-border p-1">
                   <Button
                     type="button"
                     size="sm"
@@ -273,7 +273,7 @@ export function AdvancedSurebetCalculator() {
                 />
               </div>
 
-              <Button type="button" variant="outline" onClick={addLeg} disabled={legs.length >= 3}>
+              <Button type="button" variant="outline" onClick={addLeg} disabled={legs.length >= 3} className="w-full">
                 <Plus className="mr-2 h-4 w-4" />
                 Adicionar casa
               </Button>
@@ -286,9 +286,9 @@ export function AdvancedSurebetCalculator() {
               
               return (
               <Card key={leg.id} className="overflow-hidden border-l-4 border-l-primary">
-                <CardHeader className="flex-row items-center justify-between space-y-0 px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="text-base">{leg.bookmaker || `Casa ${index + 1}`}</CardTitle>
+                <CardHeader className="flex-row items-center justify-between space-y-0 px-3 py-2.5 sm:px-4">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <CardTitle className="truncate text-base">{leg.bookmaker || `Casa ${index + 1}`}</CardTitle>
                     {leg.isLay && <Badge variant="secondary">LAY</Badge>}
                   </div>
                   <Button
@@ -303,8 +303,8 @@ export function AdvancedSurebetCalculator() {
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </CardHeader>
-                <CardContent className="space-y-4 px-4 pb-4">
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <CardContent className="space-y-3 px-3 pb-3 sm:px-4 sm:pb-4">
+                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
                     <div className="space-y-2">
                       <Label htmlFor={`bookmaker-${leg.id}`}>Casa</Label>
                       <Input
@@ -364,7 +364,7 @@ export function AdvancedSurebetCalculator() {
                   </div>
 
                   {leg.isLay && (
-                    <div className="grid gap-3 md:grid-cols-2">
+                    <div className="grid gap-3 sm:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor={`odd-lay-${leg.id}`}>Odd Lay</Label>
                         <Input
@@ -393,7 +393,7 @@ export function AdvancedSurebetCalculator() {
                     </div>
                   )}
 
-                  <div className="grid gap-3 md:grid-cols-[160px_1fr_180px]">
+                  <div className="grid gap-3 md:grid-cols-[150px_1fr_170px]">
                     <div className="space-y-2">
                       <Label>Gera freebet</Label>
                       <div className="flex h-10 items-center gap-3 rounded-md border border-input px-3">
@@ -450,9 +450,9 @@ export function AdvancedSurebetCalculator() {
           </div>
         </div>
 
-        <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+        <div className="space-y-4 xl:sticky xl:top-4 xl:self-start">
           <Card className={cn("border-2", result.minProfit >= 0 ? "border-green-500" : "border-red-500")}>
-            <CardHeader className="pb-2">
+            <CardHeader className="p-3 pb-2 sm:p-6 sm:pb-2">
               <CardTitle className="flex items-center gap-2 text-lg">
                 {result.minProfit >= 0 ? (
                   <TrendingUp className="h-5 w-5 text-green-500" />
@@ -462,10 +462,10 @@ export function AdvancedSurebetCalculator() {
                 Resultado
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 p-3 pt-1 sm:p-6 sm:pt-2">
               <div>
                 <p className="text-xs text-muted-foreground">Lucro garantido</p>
-                <p className={cn("text-3xl font-bold", result.minProfit >= 0 ? "text-green-500" : "text-red-500")}>
+                <p className={cn("text-2xl font-bold", result.minProfit >= 0 ? "text-green-500" : "text-red-500")}>
                   {formatMoney(result.minProfit)}
                 </p>
               </div>
@@ -482,13 +482,13 @@ export function AdvancedSurebetCalculator() {
           </Card>
 
           <Card>
-            <CardHeader className="pb-2">
+            <CardHeader className="p-3 pb-2 sm:p-6 sm:pb-2">
               <CardTitle className="flex items-center gap-2 text-lg">
                 <CircleDollarSign className="h-5 w-5 text-primary" />
                 Cenarios
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-2 p-3 pt-1 sm:p-6 sm:pt-2">
               {result.scenarios.map((scenario) => (
                 <div key={scenario.legId} className="rounded-md border border-border p-3">
                   <div className="flex items-center justify-between gap-3">
@@ -497,7 +497,7 @@ export function AdvancedSurebetCalculator() {
                       {formatMoney(scenario.profit)}
                     </span>
                   </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                  <div className="mt-2 grid grid-cols-1 gap-1 text-xs text-muted-foreground sm:grid-cols-2 sm:gap-2">
                     <span>Retorno: {formatMoney(scenario.returnValue)}</span>
                     <span>Freebet: {formatMoney(scenario.freebetCredit)}</span>
                   </div>
@@ -520,7 +520,7 @@ export function AdvancedSurebetCalculator() {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-border bg-muted/30 p-3">
+    <div className="rounded-md border border-border bg-muted/30 p-2.5">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-1 text-sm font-bold">{value}</p>
     </div>

@@ -369,20 +369,20 @@ useEffect(() => {
 
 
   return (
-    <div className="flex flex-col h-full max-h-[90vh]">
-      <DialogHeader className="p-6 pb-4">
-        <DialogTitle>{betToEdit ? "Editar Aposta" : "Adicionar Nova Aposta"}</DialogTitle>
-        <DialogDescription>
+    <div className="flex h-full max-h-[96svh] flex-col">
+      <DialogHeader className="p-4 pb-3 sm:p-6 sm:pb-4">
+        <DialogTitle className="text-lg sm:text-xl">{betToEdit ? "Editar Aposta" : "Adicionar Nova Aposta"}</DialogTitle>
+        <DialogDescription className="text-xs sm:text-sm">
             {betToEdit ? "Ajuste os detalhes da sua aposta." : "Registre uma aposta simples ou uma surebet para acompanhar."}
         </DialogDescription>
       </DialogHeader>
       <Form {...(form as any)}>
         <form onSubmit={handleSubmit(onSubmit) as any} className="flex flex-col flex-1 min-h-0">
             <ScrollArea className="flex-1 min-h-0">
-                <div className="space-y-4 px-6 py-2">
+                <div className="space-y-3 px-4 py-2 sm:space-y-4 sm:px-6">
                     
                     <Tabs defaultValue={activeTab} onValueChange={handleTabChange} className="w-full">
-                        <TabsList className="flex w-full overflow-x-auto gap-2 sm:grid sm:grid-cols-4 sm:overflow-visible">
+                        <TabsList className="flex h-auto w-full justify-start gap-2 overflow-x-auto whitespace-nowrap p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-4 sm:overflow-visible">
                             <TabsTrigger className="flex-shrink-0" value="single">Aposta Simples</TabsTrigger>
                             <TabsTrigger className="flex-shrink-0 flex items-center gap-2" value="surebet"><ShieldCheck className="w-4 h-4 text-teal-500"/> Surebet</TabsTrigger>
                              <TabsTrigger className="flex-shrink-0 flex items-center gap-2" value="pa_surebet"><Target className="w-4 h-4 text-orange-500"/> P.A. Surebet</TabsTrigger>
@@ -390,7 +390,7 @@ useEffect(() => {
                         </TabsList>
                         
                         {activeTab !== 'free_spins' && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                        <div className="grid grid-cols-1 gap-3 mt-3 sm:grid-cols-2 sm:gap-4 sm:mt-4">
                             <FormField control={control} name="sport" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Esporte</FormLabel>
@@ -414,7 +414,7 @@ useEffect(() => {
                         )}
 
                         {activeTab === 'single' && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                        <div className="grid grid-cols-1 gap-3 mt-3 sm:grid-cols-2 sm:gap-4 sm:mt-4">
                             {accountOptions.length > 0 && (
                               <div className="sm:col-span-2">
                                 <FormLabel>Selecionar Conta Salva</FormLabel>
@@ -466,7 +466,7 @@ useEffect(() => {
                                     <FormMessage />
                                 </FormItem>
                             )} />
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                                 <FormField control={control} name="stake" render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Valor Apostado (R$)</FormLabel>
@@ -527,7 +527,7 @@ useEffect(() => {
                         </TabsContent>
 
                         <TabsContent value="free_spins" className="space-y-4 mt-4">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                             <div className="space-y-2">
                               <FormLabel>Casa de Apostas</FormLabel>
                               <Select onValueChange={(v) => setFreeSpinsBookmaker(v)} defaultValue={freeSpinsBookmaker || (bookmakers[0]?.name || '')}>
@@ -542,7 +542,7 @@ useEffect(() => {
                               <Input className="h-11" type="number" inputMode="numeric" min={1} step={1} value={freeSpinsCount} onChange={(e) => setFreeSpinsCount(Number(e.target.value))} placeholder="10" />
                             </div>
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                             <div className="space-y-2">
                               <FormLabel>Valor Ganho (R$)</FormLabel>
                               <Input className="h-11" type="number" inputMode="decimal" step="0.01" value={freeSpinsEarned} onChange={(e) => setFreeSpinsEarned(Number(e.target.value))} placeholder="0.00" />
@@ -559,7 +559,7 @@ useEffect(() => {
                              <h3 className="text-md font-medium mb-2">Apostas da Surebet</h3>
                             <div className="space-y-4">
                                 {fields.map((item, index) => (
-                                    <div key={item.id} className="p-4 bg-muted/50 rounded-lg space-y-3 relative">
+                                    <div key={item.id} className="relative space-y-3 rounded-lg bg-muted/50 p-3 sm:p-4">
                                         {accountOptions.length > 0 && (
                                           <div className="space-y-2">
                                             <FormLabel>Selecionar Conta Salva (Perna)</FormLabel>
@@ -585,7 +585,7 @@ useEffect(() => {
                                             </Select>
                                           </div>
                                         )}
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                                           <FormField control={control} name={`subBets.${index}.accountName`} render={({ field }) => (
                                             <FormItem>
                                               <FormLabel>Conta (Perna)</FormLabel>
@@ -615,7 +615,7 @@ useEffect(() => {
                                                 <FormMessage />
                                             </FormItem>
                                         )} />
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                                             <FormField control={control} name={`subBets.${index}.odds`} render={({ field }) => (
                                                 <FormItem>
                                                     <FormLabel>Odds</FormLabel>
@@ -631,7 +631,7 @@ useEffect(() => {
                                                 </FormItem>
                                             )} />
                                         </div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
                                           <FormField control={control} name={`subBets.${index}.cashbackValue`} render={({ field }) => (
                                             <FormItem>
                                               <FormLabel>Cashback</FormLabel>
@@ -651,7 +651,7 @@ useEffect(() => {
                                           )} />
                                           <div className="space-y-2">
                                             <FormLabel>Prévia</FormLabel>
-                                            <div className="h-11 flex items-center px-3 rounded-md border text-sm">
+                                            <div className="flex min-h-11 items-center rounded-md border px-3 py-2 text-sm">
                                               {(() => {
                                                 const sb = (watchedSubBets ?? [])[index];
                                                 const v = sb?.cashbackValue ?? 0;
@@ -664,7 +664,7 @@ useEffect(() => {
                                             </div>
                                           </div>
                                         </div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
                                           <FormField control={control} name={`subBets.${index}.cashbackValue`} render={({ field }) => (
                                             <FormItem>
                                               <FormLabel>Cashback</FormLabel>
@@ -684,7 +684,7 @@ useEffect(() => {
                                           )} />
                                           <div className="space-y-2">
                                             <FormLabel>Prévia</FormLabel>
-                                            <div className="h-11 flex items-center px-3 rounded-md border text-sm">
+                                            <div className="flex min-h-11 items-center rounded-md border px-3 py-2 text-sm">
                                               {(() => {
                                                 const sb = (watchedSubBets ?? [])[index];
                                                 const v = sb?.cashbackValue ?? 0;
@@ -697,7 +697,7 @@ useEffect(() => {
                                             </div>
                                           </div>
                                         </div>
-                                        <div className="flex flex-wrap gap-4 mt-4">
+                                        <div className="flex flex-col gap-3 mt-3 sm:mt-4 sm:flex-row sm:flex-wrap sm:gap-4">
                                           <FormField
                                             control={control}
                                             name={`subBets.${index}.isFreebet`}
@@ -751,7 +751,7 @@ useEffect(() => {
                              <h3 className="text-md font-medium mb-2">Apostas da P.A. Surebet</h3>
                             <div className="space-y-4">
                                 {fields.map((item, index) => (
-                                    <div key={item.id} className="p-4 bg-muted/50 rounded-lg space-y-3 relative">
+                                    <div key={item.id} className="relative space-y-3 rounded-lg bg-muted/50 p-3 sm:p-4">
                                         {accountOptions.length > 0 && (
                                           <div className="space-y-2">
                                             <FormLabel>Selecionar Conta Salva (Perna)</FormLabel>
@@ -777,7 +777,7 @@ useEffect(() => {
                                             </Select>
                                           </div>
                                         )}
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                                           <FormField control={control} name={`subBets.${index}.accountName`} render={({ field }) => (
                                             <FormItem>
                                               <FormLabel>Conta (Perna)</FormLabel>
@@ -807,7 +807,7 @@ useEffect(() => {
                                                 <FormMessage />
                                             </FormItem>
                                         )} />
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                                             <FormField control={control} name={`subBets.${index}.odds`} render={({ field }) => (
                                                 <FormItem>
                                                     <FormLabel>Odds</FormLabel>
@@ -823,7 +823,7 @@ useEffect(() => {
                                                 </FormItem>
                                             )} />
                                         </div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
                                           <FormField control={control} name={`subBets.${index}.cashbackValue`} render={({ field }) => (
                                             <FormItem>
                                               <FormLabel>Cashback</FormLabel>
@@ -856,7 +856,7 @@ useEffect(() => {
                                             </div>
                                           </div>
                                         </div>
-                                        <div className="flex flex-wrap gap-4 mt-4">
+                                        <div className="flex flex-col gap-3 mt-3 sm:mt-4 sm:flex-row sm:flex-wrap sm:gap-4">
                                           <FormField
                                             control={control}
                                             name={`subBets.${index}.isFreebet`}
@@ -907,7 +907,7 @@ useEffect(() => {
                         </TabsContent>
                     </Tabs>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                             <FormField control={control} name="status" render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Status</FormLabel>
@@ -1034,9 +1034,9 @@ useEffect(() => {
                     )} />
                 </div>
             </ScrollArea>
-             <DialogFooter className="p-6 pt-4 flex-col md:flex-row md:justify-between items-start md:items-center border-t gap-4">
+             <DialogFooter className="flex-col items-stretch gap-3 border-t p-4 pt-3 md:flex-row md:items-center md:justify-between sm:p-6 sm:pt-4">
                  {(watchedType === 'surebet' || watchedType === 'pa_surebet') && (
-                    <div className="flex flex-wrap gap-x-4 gap-y-2 items-center text-sm">
+                    <div className="grid w-full grid-cols-2 gap-2 text-xs sm:flex sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-2 sm:text-sm">
                         <div>
                             <span className="text-muted-foreground">Total Apostado:</span>
                             <p className="font-bold">{surebetCalculations.totalStake.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>
@@ -1066,7 +1066,7 @@ useEffect(() => {
                         )}
                     </div>
                  )}
-                <div className="flex gap-2 ml-auto w-full sm:w-auto">
+                <div className="grid w-full grid-cols-2 gap-2 sm:ml-auto sm:flex sm:w-auto">
                     <Button className="w-full sm:w-auto" type="button" variant="ghost" onClick={onCancel} disabled={isSubmitting}>Cancelar</Button>
                     {activeTab === 'free_spins' ? (
                       <Button className="w-full sm:w-auto" type="button" onClick={handleSaveFreeSpins} disabled={isSubmitting}>

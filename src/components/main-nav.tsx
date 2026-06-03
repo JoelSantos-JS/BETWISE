@@ -45,7 +45,10 @@ export function MainNav({
 
   return (
     <nav
-      className={cn("hidden md:flex items-center space-x-4 lg:space-x-6", className)}
+      className={cn(
+        "flex min-w-0 items-center gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:gap-4 lg:gap-6",
+        className
+      )}
       {...props}
     >
       {routes.map((route) => (
@@ -53,9 +56,9 @@ export function MainNav({
           key={route.href}
           href={route.href}
           className={cn(
-            "text-sm font-medium transition-colors hover:text-primary flex items-center gap-2",
+            "flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-xs font-medium transition-colors hover:text-primary md:rounded-none md:px-0 md:py-0 md:text-sm",
             route.active
-              ? "text-primary dark:text-white"
+              ? "bg-primary text-primary-foreground md:bg-transparent md:text-primary md:dark:text-white"
               : "text-muted-foreground"
           )}
         >
