@@ -24,7 +24,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, toValidDate } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useBets } from '@/context/bet-provider';
 import { useRouter } from 'next/navigation';
@@ -341,8 +341,8 @@ export function AddBetForm() {
                           !field.value && 'text-muted-foreground'
                         )}
                       >
-                        {field.value ? (
-                          format(field.value, 'PPP')
+                        {toValidDate(field.value) ? (
+                          format(toValidDate(field.value)!, 'PPP')
                         ) : (
                           <span>Pick a date</span>
                         )}
@@ -353,7 +353,7 @@ export function AddBetForm() {
                   <PopoverContent className="w-auto p-0" align="start">
                     <Calendar
                       mode="single"
-                      selected={field.value}
+                      selected={toValidDate(field.value) ?? undefined}
                       onSelect={field.onChange}
                       disabled={(date) =>
                         date > new Date() || date < new Date('1900-01-01')
@@ -560,8 +560,8 @@ export function AddBetForm() {
                               !field.value && 'text-muted-foreground'
                             )}
                           >
-                            {field.value ? (
-                              format(field.value, 'PPP')
+                            {toValidDate(field.value) ? (
+                              format(toValidDate(field.value)!, 'PPP')
                             ) : (
                               <span>Escolha a data</span>
                             )}
@@ -572,7 +572,7 @@ export function AddBetForm() {
                       <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
                           mode="single"
-                          selected={field.value}
+                          selected={toValidDate(field.value) ?? undefined}
                           onSelect={field.onChange}
                           disabled={(date) =>
                             date > new Date() || date < new Date('1900-01-01')

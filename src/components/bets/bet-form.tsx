@@ -20,7 +20,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Calendar } from "../ui/calendar";
 import { CalendarIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, toValidDate } from "@/lib/utils";
 import { Checkbox } from "../ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useBets } from "@/context/bet-provider";
@@ -147,7 +147,7 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
         type: 'single' as const,
         sport: betToEdit.sport,
         event: betToEdit.event,
-        date: new Date(betToEdit.date),
+        date: toValidDate(betToEdit.date) ?? new Date(),
         status: betToEdit.status,
         accountName: betToEdit.accountName || '',
         accountCpf: betToEdit.accountCpf || '',
@@ -163,7 +163,7 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
         type: (betToEdit.type || 'surebet') as 'surebet' | 'pa_surebet',
         sport: betToEdit.sport,
         event: betToEdit.event,
-        date: new Date(betToEdit.date),
+        date: toValidDate(betToEdit.date) ?? new Date(),
         status: betToEdit.status,
         accountName: betToEdit.accountName || '',
         accountCpf: betToEdit.accountCpf || '',
@@ -332,7 +332,7 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
     setValue('type', type);
     setValue('sport', sport || 'Futebol');
     setValue('event', result.event ?? '');
-    setValue('date', result.date ? new Date(result.date) : new Date());
+    setValue('date', toValidDate(result.date) ?? new Date());
     setValue('status', result.status || 'pending');
     setValue('accountName', account.name);
     setValue('accountCpf', account.cpf);
@@ -1212,12 +1212,12 @@ useEffect(() => {
                                         <FormControl>
                                         <Button variant={"outline"} className={cn("w-full justify-start pl-3 text-left font-normal min-h-11", !field.value && "text-muted-foreground")}>
                                             <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {field.value ? format(field.value, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}
+                                            {toValidDate(field.value) ? format(toValidDate(field.value)!, "PPP", { locale: ptBR }) : <span>Escolha uma data</span>}
                                         </Button>
                                         </FormControl>
                                     </PopoverTrigger>
                                 <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus locale={ptBR}/>
+                                    <Calendar mode="single" selected={toValidDate(field.value) ?? undefined} onSelect={field.onChange} initialFocus locale={ptBR}/>
                                 </PopoverContent>
                                 </Popover>
                                 <FormMessage />

@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import type { Bet } from '@/lib/types';
-import { cn } from '@/lib/utils';
+import { cn, formatDateSafe } from '@/lib/utils';
 import { format } from 'date-fns';
 
 export function BettingTable({ bets }: { bets: Bet[] }) {
@@ -58,7 +58,7 @@ export function BettingTable({ bets }: { bets: Bet[] }) {
               </TableCell>
               <TableCell className="hidden sm:table-cell">{bet.betType}</TableCell>
               <TableCell className="hidden lg:table-cell">
-                {format(new Date(bet.date), 'MMM d, yyyy')}
+                {formatDateSafe(bet.date, 'MMM d, yyyy')}
               </TableCell>
               <TableCell className="text-right">
                 {(bet.stake ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}

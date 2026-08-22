@@ -12,6 +12,7 @@ import {
 import { useMemo } from 'react';
 import type { Bet } from '@/lib/types';
 import { format } from 'date-fns';
+import { toValidDate, formatDateSafe } from '@/lib/utils';
 
 export function PerformanceCharts({ bets }: { bets: Bet[] }) {
   const chartData = useMemo(() => {
@@ -33,10 +34,10 @@ export function PerformanceCharts({ bets }: { bets: Bet[] }) {
       }
       cumulativeProfit += profit;
       return {
-        date: new Date(bet.date),
+        date: toValidDate(bet.date),
         profit: cumulativeProfit,
       };
-    });
+    }).filter((d): d is { date: Date; profit: number } => d.date !== null);
 
     // Group by day and take the last profit of the day
     const dailyData = data.reduce((acc, { date, profit }) => {
@@ -67,7 +68,7 @@ export function PerformanceCharts({ bets }: { bets: Bet[] }) {
           fontSize={12}
           tickLine={false}
           axisLine={false}
-          tickFormatter={(value) => format(new Date(value), 'MMM d')}
+          tickFormatter={(value) => formatDateSafe(value, 'MMM d')}
         />
         <YAxis
           stroke="hsl(var(--muted-foreground))"
@@ -81,7 +82,7 @@ export function PerformanceCharts({ bets }: { bets: Bet[] }) {
             backgroundColor: 'hsl(var(--background))',
             borderColor: 'hsl(var(--border))',
           }}
-          labelFormatter={(label) => format(new Date(label), 'PPP')}
+          labelFormatter={(label) => formatDateSafe(label, 'PPP')}
         />
         <Line
           type="monotone"

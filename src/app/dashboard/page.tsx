@@ -40,6 +40,7 @@ import { BookmakerCard } from '@/components/bookmakers/bookmaker-card';
 import { BookmakerForm } from '@/components/bookmakers/bookmaker-form';
 import * as XLSX from 'xlsx';
 import { calculateSurebet } from '@/lib/surebet-calculator';
+import { formatDateSafe } from '@/lib/utils';
 
 type ClosedMonthRecord = {
     profit?: number;
@@ -2378,7 +2379,7 @@ export default function BetsPage() {
                                             <div className="min-w-0">
                                                 <div className="font-semibold truncate">{bet.event}</div>
                                                 <div className="text-xs text-muted-foreground truncate">
-                                                    {format(new Date(bet.date), 'dd/MM/yyyy')} · {bet.bookmaker ?? 'Sem casa'} · {bet.betType ?? 'Sem mercado'}
+                                                    {formatDateSafe(bet.date, 'dd/MM/yyyy')} · {bet.bookmaker ?? 'Sem casa'} · {bet.betType ?? 'Sem mercado'}
                                                 </div>
                                             </div>
                                             <div className="flex items-center justify-between sm:justify-end gap-4">
@@ -2784,7 +2785,7 @@ export default function BetsPage() {
                                             <div className="min-w-0">
                                                 <div className="font-semibold truncate">{bet.event}</div>
                                                 <div className="text-xs text-muted-foreground truncate">
-                                                    {format(new Date(bet.date), 'dd/MM/yyyy')} · {bet.bookmaker ?? 'Sem casa'} · {bet.betType ?? 'Sem mercado'}
+                                                    {formatDateSafe(bet.date, 'dd/MM/yyyy')} · {bet.bookmaker ?? 'Sem casa'} · {bet.betType ?? 'Sem mercado'}
                                                 </div>
                                             </div>
                                             <div className="flex items-center justify-between gap-4 sm:justify-end">
@@ -3043,7 +3044,7 @@ export default function BetsPage() {
                                     {statsRowsFiltered.length > 0 ? (
                                         statsRowsFiltered.map(({ bet, staked, net, roi }) => (
                                             <TableRow key={bet.id}>
-                                                <TableCell className="px-3 py-3 whitespace-nowrap">{format(new Date(bet.date), 'dd/MM/yyyy')}</TableCell>
+                                                <TableCell className="px-3 py-3 whitespace-nowrap">{formatDateSafe(bet.date, 'dd/MM/yyyy')}</TableCell>
                                                 <TableCell className="px-3 py-3">
                                                     <div className="max-w-[260px] truncate font-medium">{bet.event}</div>
                                                     <div className="text-xs text-muted-foreground">{bet.betType ?? '—'}</div>
