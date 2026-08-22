@@ -298,6 +298,12 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
     return matches.length ? matches[0].name : name;
   };
 
+  // O modelo às vezes devolve a palavra "null" como texto em vez de null de verdade.
+  const clean = (value: string | null | undefined): string => {
+    const v = (value ?? '').trim();
+    return /^(null|undefined|n\/a|-|--)$/i.test(v) ? '' : v;
+  };
+
   const matchAccount = (name: string | null, cpf: string | null, list: Account[]) => {
     if (!list.length) return { name: name ?? "", cpf: cpf ?? "" };
     const digits = (cpf ?? "").replace(/\D/g, "");
@@ -325,13 +331,15 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
     });
 
   const applyExtraction = (result: ExtractBetFromImageOutput) => {
-    const type = result.type || 'single';
+    const legs = result.subBets ?? [];
+    // 3 pernas ou mais é sempre P.A. Surebet, independente do que o modelo classificou.
+    const type = legs.length >= 3 ? 'pa_surebet' : (result.type || 'single');
     const sport = normalizeSport(result.sport);
-    const account = matchAccount(result.accountName, result.accountCpf, accountOptions);
+    const account = matchAccount(clean(result.accountName), clean(result.accountCpf), accountOptions);
 
     setValue('type', type);
     setValue('sport', sport || 'Futebol');
-    setValue('event', result.event ?? '');
+    setValue('event', clean(result.event));
     setValue('date', toValidDate(result.date) ?? new Date());
     setValue('status', result.status || 'pending');
     setValue('accountName', account.name);
@@ -339,18 +347,24 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
     setValue('earnedFreebetValue', result.earnedFreebetValue ?? 0);
 
     if (type === 'single') {
-      setValue('bookmaker', matchBookmaker(result.bookmaker, bookmakers));
-      setValue('betType', result.betType ?? '');
+      setValue('bookmaker', matchBookmaker(clean(result.bookmaker), bookmakers));
+      setValue('betType', clean(result.betType));
       setValue('stake', result.stake ?? 0);
       setValue('odds', result.odds ?? 1.01);
       setValue('isBoostedBet', Boolean(result.isBoostedBet));
     } else {
-      const subBets = (result.subBets ?? []).map((sb) => {
-        const acc = matchAccount(sb.accountName, sb.accountCpf, accountOptions);
+      // Conta padrão só entra na P.A. Surebet; nas outras abas fica o que a IA
+      // realmente reconheceu no print.
+      const defaultAccount = type === 'pa_surebet' ? accountOptions[0] : undefined;
+      const subBets = legs.map((sb) => {
+        const matched = matchAccount(clean(sb.accountName), clean(sb.accountCpf), accountOptions);
+        const acc = matched.cpf || matched.name
+          ? matched
+          : { name: defaultAccount?.name ?? '', cpf: defaultAccount?.cpf ?? '' };
         return {
           id: new Date().toISOString() + Math.random().toString(36).slice(2, 8),
-          bookmaker: matchBookmaker(sb.bookmaker, bookmakers),
-          betType: sb.betType ?? '',
+          bookmaker: matchBookmaker(clean(sb.bookmaker), bookmakers),
+          betType: clean(sb.betType),
           odds: sb.odds ?? 1.01,
           stake: sb.stake ?? 0,
           isFreebet: Boolean(sb.isFreebet),

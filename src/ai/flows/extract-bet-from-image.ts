@@ -185,13 +185,13 @@ export const extractBetFromImageFlow = ai.defineFlow(
           `Você é um analisador de comprovantes de apostas esportivas. Analise a imagem anexada e extraia ` +
           `os dados exatos para preencher o formulário de aposta do sistema.\n\n` +
           `REGRAS OBRIGATÓRIAS:\n` +
-          `1. Detecte o tipo: "single" (uma aposta), "surebet" (2+ pernas, uma em cada casa, mesmo evento) ou ` +
-          `"pa_surebet" (surebet envolvendo pagamento antecipado).\n` +
+          `1. Detecte o tipo: "single" (uma aposta), "surebet" (exatamente 2 pernas, uma em cada casa, mesmo evento) ou ` +
+          `"pa_surebet" (surebet envolvendo pagamento antecipado). Se o comprovante tiver 3 ou mais pernas/linhas, o tipo e SEMPRE "pa_surebet".\n` +
           `2. Para surebet/pa_surebet, preencha subBets com TODAS as pernas visíveis (casa, mercado, odds, valor).\n` +
           `3. Normalize o esporte para um destes valores: ${SPORT_OPTIONS.join(', ')}. Ex: "soccer"/"football" -> "Futebol".\n` +
           `4. Casamento de casas: use exatamente um nome da lista fornecida quando possível. Lista de casas: ${bookmakerHint}.\n` +
           `5. Casamento de contas: use nome e CPF exatamente da lista fornecida. Lista de contas: ${accountHint}.\n` +
-          `6. Nunca invente dados. Onde não houver valor visível, use null (e false para booleanos).\n` +
+          `6. Nunca invente dados. Onde nao houver valor visivel, use null de verdade do JSON (e false para booleanos) - nunca a palavra "null", "N/A" ou "-" como texto.\n` +
           `7. Valores monetários em R$, sem símbolo. Odds em formato decimal (ex: 3.40).\n` +
           `8. Data em ISO (YYYY-MM-DD). Se não houver data visível, use null.\n` +
           `9. "status": use "pending" a menos que o comprovante mostre claramente resultado (ganho/perdido).\n` +
