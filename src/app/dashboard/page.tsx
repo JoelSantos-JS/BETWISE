@@ -3080,7 +3080,10 @@ export default function BetsPage() {
             <Dialog open={isBetFormOpen} onOpenChange={isOpen => {
                 if(!isOpen) { setIsBetFormOpen(false); setBetToEdit(null); }
             }}>
-                <DialogContent className="max-h-[96svh] w-[calc(100vw-0.75rem)] max-w-2xl overflow-hidden p-0 sm:w-full">
+                <DialogContent
+                    className="max-h-[96svh] w-[calc(100vw-0.75rem)] max-w-2xl overflow-hidden p-0 sm:w-full"
+                    onInteractOutside={(e) => e.preventDefault()}
+                >
                     <BetForm 
                         onSave={handleSaveBet}
                         betToEdit={betToEdit}
@@ -3094,7 +3097,7 @@ export default function BetsPage() {
             <Dialog open={isBookmakerFormOpen} onOpenChange={isOpen => {
                 if (!isOpen) { setIsBookmakerFormOpen(false); setBookmakerToEdit(null); }
             }}>
-                <DialogContent className="max-w-md p-0">
+                <DialogContent className="max-w-md p-0" onInteractOutside={(e) => e.preventDefault()}>
                     <BookmakerForm
                         onSave={handleSaveBookmaker}
                         bookmakerToEdit={bookmakerToEdit}
