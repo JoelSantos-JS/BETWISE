@@ -419,33 +419,58 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
   const [isDraggingImage, setIsDraggingImage] = useState(false);
 
   // Prints copiados para a área de transferência (Ctrl+V) entram direto, sem salvar arquivo.
-  useEffect(() => {
-    const onPaste = (e: ClipboardEvent) => {
-      const items = Array.from(e.clipboardData?.items ?? []);
-      const imageItem = items.find((item) => item.kind === 'file' && item.type.startsWith('image/'));
-      if (!imageItem) return;
-      const file = imageItem.getAsFile();
-      if (!file) return;
-      e.preventDefault();
+  const consumeClipboardData = (data: DataTransfer | null): boolean => {
+    if (!data) return false;
+    const fromFiles = Array.from(data.files ?? []).find((f) => f.type.startsWith('image/'));
+    if (fromFiles) {
+      extractRef.current(fromFiles);
+      return true;
+    }
+    const item = Array.from(data.items ?? []).find((i) => i.type.startsWith('image/'));
+    const file = item?.getAsFile();
+    if (file) {
       extractRef.current(file);
+      return true;
+    }
+    return false;
+  };
+
+  useEffect(() => {
+    // Captura na fase de captura e na window: nenhum componente intermediário engole o evento.
+    const onPaste = (e: ClipboardEvent) => {
+      if (!consumeClipboardData(e.clipboardData)) {
+        setExtractError('Não encontrei imagem na área de transferência. Copie o print (Ctrl+C / "Copiar") e cole de novo.');
+        return;
+      }
+      e.preventDefault();
+      setExtractError(null);
     };
-    document.addEventListener('paste', onPaste);
-    return () => document.removeEventListener('paste', onPaste);
+    document.addEventListener('paste', onPaste, true);
+    window.addEventListener('paste', onPaste, true);
+    return () => {
+      document.removeEventListener('paste', onPaste, true);
+      window.removeEventListener('paste', onPaste, true);
+    };
   }, []);
 
   const handlePasteFromClipboard = async () => {
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.read) {
+      setExtractError('Este navegador só permite colar com Ctrl+V (a leitura direta exige HTTPS ou localhost).');
+      return;
+    }
     try {
       const items = await navigator.clipboard.read();
       for (const item of items) {
         const type = item.types.find((t) => t.startsWith('image/'));
         if (!type) continue;
         const blob = await item.getType(type);
+        setExtractError(null);
         await handleExtractFromImage(new File([blob], 'print.png', { type }));
         return;
       }
       setExtractError('Nenhuma imagem encontrada na área de transferência.');
     } catch {
-      setExtractError('Não foi possível ler a área de transferência. Tente colar com Ctrl+V.');
+      setExtractError('Não foi possível ler a área de transferência. Clique no formulário e use Ctrl+V.');
     }
   };
 
@@ -585,6 +610,13 @@ useEffect(() => {
                             "rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-3 transition-colors",
                             isDraggingImage && "border-primary bg-primary/15"
                         )}
+                        tabIndex={0}
+                        onPaste={(e) => {
+                            if (consumeClipboardData(e.clipboardData)) {
+                                e.preventDefault();
+                                setExtractError(null);
+                            }
+                        }}
                         onDragOver={(e) => { e.preventDefault(); setIsDraggingImage(true); }}
                         onDragLeave={() => setIsDraggingImage(false)}
                         onDrop={handleImageDrop}
