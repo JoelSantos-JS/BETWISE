@@ -17,8 +17,8 @@ import { doc, getDoc, setDoc, deleteField } from "firebase/firestore";
 const SETTINGS_PATH = (uid: string) => doc(db, "users", uid, "settings", "ai");
 
 const MODEL_OPTIONS = [
-  { value: "googleai/gemini-2.5-flash", label: "Gemini 2.5 Flash (recomendado)", description: "Melhor equilíbrio. Cota free: ~250/dia" },
-  { value: "googleai/gemini-2.5-flash-lite", label: "Gemini 2.5 Flash-Lite", description: "Cota bem maior (~1000/dia), mais rápido" },
+  { value: "googleai/gemini-2.5-flash-lite", label: "Gemini 2.5 Flash-Lite (recomendado)", description: "Mais barato e rápido. Cota free: ~1000/dia" },
+  { value: "googleai/gemini-2.5-flash", label: "Gemini 2.5 Flash", description: "Mais preciso em prints difíceis. Cota free: ~250/dia" },
   { value: "googleai/gemini-2.5-pro", label: "Gemini 2.5 Pro", description: "Mais preciso, cota menor (~100/dia)" },
   { value: "googleai/gemini-2.0-flash-lite", label: "Gemini 2.0 Flash-Lite", description: "Legado, barato (atenção: deprecado)" },
 ] as const;
@@ -29,7 +29,7 @@ export default function ConfiguracoesPage() {
   const { toast } = useToast();
 
   const [apiKey, setApiKey] = useState("");
-  const [model, setModel] = useState<string>("googleai/gemini-2.5-flash");
+  const [model, setModel] = useState<string>("googleai/gemini-2.5-flash-lite");
   const [hasSavedKey, setHasSavedKey] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

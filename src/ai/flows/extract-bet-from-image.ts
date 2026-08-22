@@ -74,7 +74,7 @@ const ExtractBetFromImageInputSchema = z.object({
   model: z
     .string()
     .optional()
-    .describe('Modelo Gemini a usar (ex: googleai/gemini-2.5-flash). Padrão: gemini-2.5-flash.'),
+    .describe('Modelo Gemini a usar (ex: googleai/gemini-2.5-flash). Padrão: gemini-2.5-flash-lite.'),
 });
 
 const SUPPORTED_MODELS = [
@@ -98,7 +98,7 @@ async function withRateLimitRetry<T>(fn: () => Promise<T>, maxRetries = 3): Prom
       if (!isRateLimitError(message) || attempt >= maxRetries) {
         throw new Error(
           isRateLimitError(message)
-            ? 'Cota gratuita do Gemini esgotada (limite de requisições). Aguarde alguns minutos ou troque para o modelo flash-lite em Configurações.'
+            ? 'Cota gratuita do Gemini esgotada (limite de requisições). Aguarde alguns minutos ou troque o modelo em Configurações.'
             : message
         );
       }
@@ -219,7 +219,7 @@ export const extractBetFromImageFlow = ai.defineFlow(
     const generateOpts: Parameters<typeof ai.generate>[0] = {
       model: SUPPORTED_MODELS.includes(input.model as any)
         ? (input.model as string)
-        : 'googleai/gemini-2.5-flash',
+        : 'googleai/gemini-2.5-flash-lite',
       prompt,
       output: { schema: ExtractBetFromImageOutputSchema },
     };

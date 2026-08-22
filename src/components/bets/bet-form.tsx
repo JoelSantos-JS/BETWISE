@@ -3,7 +3,7 @@
 import { useForm, useFieldArray, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, ShieldCheck, Trash2, PlusCircle, Star, Target, Gift, Zap, ImagePlus, Sparkles, X } from "lucide-react";
+import { Loader2, ShieldCheck, Trash2, PlusCircle, Star, Target, Gift, Zap, ImagePlus, ClipboardPaste, Sparkles, X } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import React, { useEffect, useRef, useState } from 'react';
@@ -414,6 +414,48 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
     }
   };
 
+  const extractRef = useRef(handleExtractFromImage);
+  extractRef.current = handleExtractFromImage;
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
+
+  // Prints copiados para a área de transferência (Ctrl+V) entram direto, sem salvar arquivo.
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const items = Array.from(e.clipboardData?.items ?? []);
+      const imageItem = items.find((item) => item.kind === 'file' && item.type.startsWith('image/'));
+      if (!imageItem) return;
+      const file = imageItem.getAsFile();
+      if (!file) return;
+      e.preventDefault();
+      extractRef.current(file);
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, []);
+
+  const handlePasteFromClipboard = async () => {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const item of items) {
+        const type = item.types.find((t) => t.startsWith('image/'));
+        if (!type) continue;
+        const blob = await item.getType(type);
+        await handleExtractFromImage(new File([blob], 'print.png', { type }));
+        return;
+      }
+      setExtractError('Nenhuma imagem encontrada na área de transferência.');
+    } catch {
+      setExtractError('Não foi possível ler a área de transferência. Tente colar com Ctrl+V.');
+    }
+  };
+
+  const handleImageDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingImage(false);
+    const file = Array.from(e.dataTransfer.files ?? []).find((f) => f.type.startsWith('image/'));
+    if (file) handleExtractFromImage(file);
+  };
+
   const surebetCalculations = React.useMemo(() => {
     if (watchedType !== 'surebet' && watchedType !== 'pa_surebet') {
       return { totalStake: 0, guaranteedProfit: 0, profitPercentage: 0, minCashback: 0, maxCashback: 0 };
@@ -538,16 +580,30 @@ useEffect(() => {
         <form onSubmit={handleSubmit(onSubmit) as any} className="flex flex-col flex-1 min-h-0">
             <ScrollArea className="flex-1 min-h-0">
                 <div className="space-y-3 px-4 py-2 sm:space-y-4 sm:px-6">
-                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-3">
-                        <div className="flex items-center justify-between gap-2">
+                    <div
+                        className={cn(
+                            "rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-3 transition-colors",
+                            isDraggingImage && "border-primary bg-primary/15"
+                        )}
+                        onDragOver={(e) => { e.preventDefault(); setIsDraggingImage(true); }}
+                        onDragLeave={() => setIsDraggingImage(false)}
+                        onDrop={handleImageDrop}
+                    >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
                                 <Sparkles className="h-4 w-4 text-primary shrink-0" />
                                 <span className="text-sm font-semibold">Extração automática por IA</span>
                             </div>
-                            <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isExtracting}>
-                                {isExtracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
-                                {isExtracting ? 'Analisando...' : 'Enviar imagem'}
-                            </Button>
+                            <div className="flex items-center gap-2">
+                                <Button type="button" variant="secondary" size="sm" onClick={handlePasteFromClipboard} disabled={isExtracting}>
+                                    {isExtracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardPaste className="h-4 w-4" />}
+                                    {isExtracting ? 'Analisando...' : 'Colar print'}
+                                </Button>
+                                <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isExtracting}>
+                                    <ImagePlus className="h-4 w-4" />
+                                    Enviar arquivo
+                                </Button>
+                            </div>
                             <input
                                 ref={fileInputRef}
                                 type="file"
@@ -561,7 +617,7 @@ useEffect(() => {
                             />
                         </div>
                         <p className="text-xs text-muted-foreground">
-                            Envie um print do comprovante da aposta para preencher os campos automaticamente.
+                            Tire o print, aperte <kbd className="rounded border px-1 text-[10px]">Ctrl</kbd>+<kbd className="rounded border px-1 text-[10px]">V</kbd> aqui (ou arraste a imagem) e os campos são preenchidos sozinhos. Não precisa salvar o arquivo.
                         </p>
                         {extractPreview && (
                             <div className="flex items-center gap-3">
