@@ -8,6 +8,7 @@ import {
   Calculator,
   Layers,
   Sparkles,
+  Settings2,
 } from "lucide-react";
 
 export function MainNav({
@@ -40,6 +41,12 @@ export function MainNav({
       label: "Casas e Clones",
       icon: Layers,
       active: pathname === `/dashboard/casas-clones`,
+    },
+    {
+      href: `/dashboard/configuracoes`,
+      label: "Configurações",
+      icon: Settings2,
+      active: pathname === `/dashboard/configuracoes`,
     },
   ];
 

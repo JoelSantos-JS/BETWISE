@@ -4,6 +4,9 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useBets } from '@/context/bet-provider';
+import { useAuth } from '@/context/auth-context';
+import { db } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import type { GenerateBettingInsightsOutput } from '@/ai/flows/generate-betting-insights';
 import type { SuggestImprovementsOutput } from '@/ai/flows/suggest-improvements';
 import { Sparkles, Bot } from 'lucide-react';
@@ -11,11 +14,22 @@ import { Skeleton } from './ui/skeleton';
 
 export function AIInsights() {
   const { bets } = useBets();
+  const { user } = useAuth();
   const [insights, setInsights] = useState<GenerateBettingInsightsOutput | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestImprovementsOutput | null>(null);
   const [isInsightsLoading, setIsInsightsLoading] = useState(false);
   const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const getApiKey = async () => {
+    if (!user) return '';
+    try {
+      const settingsSnap = await getDoc(doc(db, 'users', user.uid, 'settings', 'ai'));
+      return (settingsSnap.data()?.geminiApiKey as string) ?? '';
+    } catch {
+      return '';
+    }
+  };
 
   const handleGenerateInsights = async () => {
     setIsInsightsLoading(true);
@@ -23,14 +37,16 @@ export function AIInsights() {
     setInsights(null);
 
     try {
+      const apiKey = await getApiKey();
       const response = await fetch('/api/genkit/generateBettingInsightsFlow', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bettingData: JSON.stringify(bets) }),
+        body: JSON.stringify({ bettingData: JSON.stringify(bets), apiKey }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate insights. Please try again.');
+        const text = await response.text();
+        throw new Error(text || 'Failed to generate insights. Please try again.');
       }
       const result = await response.json();
       setInsights(result);
@@ -47,15 +63,17 @@ export function AIInsights() {
     setSuggestions(null);
 
     try {
+        const apiKey = await getApiKey();
         const summary = `User has ${bets.length} bets. Recent bets include various sports and markets.`;
         const response = await fetch('/api/genkit/suggestImprovementsFlow', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bettingDataSummary: summary }),
+            body: JSON.stringify({ bettingDataSummary: summary, apiKey }),
         });
 
         if (!response.ok) {
-            throw new Error('Failed to generate suggestions. Please try again.');
+            const text = await response.text();
+            throw new Error(text || 'Failed to generate suggestions. Please try again.');
         }
         const result = await response.json();
         setSuggestions(result);

@@ -17,6 +17,10 @@ const SuggestImprovementsInputSchema = z.object({
     .describe(
       'A summary of the user\'s betting data, including bet types, stake amounts, markets, and outcomes.'
     ),
+  apiKey: z
+    .string()
+    .optional()
+    .describe('Chave da API do Gemini configurada pelo usuario (sobrescreve a do ambiente).'),
 });
 export type SuggestImprovementsInput = z.infer<typeof SuggestImprovementsInputSchema>;
 
@@ -41,10 +45,22 @@ export const suggestImprovementsFlow = ai.defineFlow(
   },
   async (input) => {
     const prompt = `You are an AI assistant specializing in providing betting strategy improvements.\n\nBased on the following summary of the user's betting data, provide suggestions for improving their betting strategy. Consider recommending specific types of bets, optimal stake amounts, or alternative betting markets to increase their chances of winning and maximize their profits.\n\nBetting Data Summary: ${input.bettingDataSummary}\n\nSuggestions:`;
-    const { output } = await ai.generate({
+    const apiKey =
+      input.apiKey ||
+      process.env.GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.GOOGLE_GENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error(
+        'Chave do Gemini não configurada. Salve sua chave na página Configurações.'
+      );
+    }
+    const generateOpts: Parameters<typeof ai.generate>[0] = {
       prompt,
       output: { schema: SuggestImprovementsOutputSchema },
-    });
+      config: { apiKey } as any,
+    };
+    const { output } = await ai.generate(generateOpts);
     if (!output) throw new Error('No output from model');
     return output;
   }

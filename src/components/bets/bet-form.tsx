@@ -3,12 +3,13 @@
 import { useForm, useFieldArray, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2, ShieldCheck, Trash2, PlusCircle, Star, Target, Gift, Zap } from "lucide-react";
+import { Loader2, ShieldCheck, Trash2, PlusCircle, Star, Target, Gift, Zap, ImagePlus, Sparkles, X } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
-import type { Bet, Bookmaker, OutcomeScenario } from "@/lib/types";
+import type { Bet, Bookmaker, OutcomeScenario, Account } from "@/lib/types";
+import type { ExtractBetFromImageOutput } from "@/ai/flows/extract-bet-from-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,7 +24,10 @@ import { cn } from "@/lib/utils";
 import { Checkbox } from "../ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useBets } from "@/context/bet-provider";
+import { useAuth } from "@/context/auth-context";
 import { useToast } from "@/hooks/use-toast";
+import { db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
 import { calculateSurebet } from "@/lib/surebet-calculator";
  
 
@@ -123,8 +127,13 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
   const [applyGainDiscount, setApplyGainDiscount] = useState(false);
   const [applyGainDiscountResolution, setApplyGainDiscountResolution] = useState(false);
   const { addFreeSpin, addAccount, accounts } = useBets();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [extractPreview, setExtractPreview] = useState<string | null>(null);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const accountOptions = React.useMemo(() => {
     return (accounts ?? []).slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
@@ -256,6 +265,155 @@ export function BetForm({ onSave, betToEdit, onCancel, bookmakers }: BetFormProp
     }
   };
   
+  const normalizeText = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+
+  const SPORT_ALIASES: Record<string, string> = {
+    FUTEBOL: "Futebol", SOCCER: "Futebol", FOOTBALL: "Futebol",
+    BASQUETE: "Basquete", BASKETBALL: "Basquete",
+    TENIS: "Tênis", TENNIS: "Tênis",
+    VOLEI: "Vôlei", VOLLEYBALL: "Vôlei",
+    "FUTEBOL AMERICANO": "Futebol Americano", "AMERICAN FOOTBALL": "Futebol Americano", NFL: "Futebol Americano",
+    MMA: "MMA",
+    ESPORTS: "E-Sports", "E-SPORTS": "E-Sports", "E SPORTS": "E-Sports",
+  };
+
+  const normalizeSport = (sport: string | null): string => {
+    const raw = sport ?? "";
+    const key = normalizeText(raw);
+    if (!key) return "";
+    if (SPORT_ALIASES[key]) return SPORT_ALIASES[key];
+    const alias = Object.entries(SPORT_ALIASES).find(([k]) => k.includes(key) || key.includes(k));
+    return alias ? alias[1] : raw;
+  };
+
+  const matchBookmaker = (name: string | null, list: Bookmaker[]): string => {
+    if (!name) return "";
+    const target = normalizeText(name);
+    const matches = list
+      .filter((bk) => {
+        const bkName = normalizeText(bk.name);
+        return bkName.includes(target) || target.includes(bkName);
+      })
+      .sort((a, b) => normalizeText(b.name).length - normalizeText(a.name).length);
+    return matches.length ? matches[0].name : name;
+  };
+
+  const matchAccount = (name: string | null, cpf: string | null, list: Account[]) => {
+    if (!list.length) return { name: name ?? "", cpf: cpf ?? "" };
+    const digits = (cpf ?? "").replace(/\D/g, "");
+    if (digits.length >= 6) {
+      const byCpf = list.find((a) => a.cpf.replace(/\D/g, "").includes(digits));
+      if (byCpf) return { name: byCpf.name, cpf: byCpf.cpf };
+    }
+    if (name) {
+      const target = normalizeText(name);
+      const byName = list.find((a) => {
+        const accName = normalizeText(a.name);
+        return accName.includes(target) || target.includes(accName);
+      });
+      if (byName) return { name: byName.name, cpf: byName.cpf };
+    }
+    return { name: name ?? "", cpf: cpf ?? "" };
+  };
+
+  const fileToDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error("Falha ao ler a imagem."));
+      reader.readAsDataURL(file);
+    });
+
+  const applyExtraction = (result: ExtractBetFromImageOutput) => {
+    const type = result.type || 'single';
+    const sport = normalizeSport(result.sport);
+    const account = matchAccount(result.accountName, result.accountCpf, accountOptions);
+
+    setValue('type', type);
+    setValue('sport', sport || 'Futebol');
+    setValue('event', result.event ?? '');
+    setValue('date', result.date ? new Date(result.date) : new Date());
+    setValue('status', result.status || 'pending');
+    setValue('accountName', account.name);
+    setValue('accountCpf', account.cpf);
+    setValue('earnedFreebetValue', result.earnedFreebetValue ?? 0);
+
+    if (type === 'single') {
+      setValue('bookmaker', matchBookmaker(result.bookmaker, bookmakers));
+      setValue('betType', result.betType ?? '');
+      setValue('stake', result.stake ?? 0);
+      setValue('odds', result.odds ?? 1.01);
+      setValue('isBoostedBet', Boolean(result.isBoostedBet));
+    } else {
+      const subBets = (result.subBets ?? []).map((sb) => {
+        const acc = matchAccount(sb.accountName, sb.accountCpf, accountOptions);
+        return {
+          id: new Date().toISOString() + Math.random().toString(36).slice(2, 8),
+          bookmaker: matchBookmaker(sb.bookmaker, bookmakers),
+          betType: sb.betType ?? '',
+          odds: sb.odds ?? 1.01,
+          stake: sb.stake ?? 0,
+          isFreebet: Boolean(sb.isFreebet),
+          hasPa: Boolean(sb.hasPa),
+          accountName: acc.name,
+          accountCpf: acc.cpf,
+          cashbackValue: sb.cashbackValue ?? undefined,
+          cashbackMode: sb.cashbackMode ?? undefined,
+        };
+      });
+      setValue('subBets', subBets);
+    }
+    setActiveTab(type);
+    toast({ title: "Dados extraídos!", description: "Revise os campos e salve a aposta." });
+  };
+
+  const handleExtractFromImage = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setExtractError('Envie um arquivo de imagem (PNG/JPG).');
+      return;
+    }
+    setExtractError(null);
+    setIsExtracting(true);
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      setExtractPreview(dataUrl);
+
+      let apiKey = '';
+      let model = '';
+      if (user) {
+        try {
+          const settingsSnap = await getDoc(doc(db, 'users', user.uid, 'settings', 'ai'));
+          apiKey = (settingsSnap.data()?.geminiApiKey as string) ?? '';
+          model = (settingsSnap.data()?.geminiModel as string) ?? '';
+        } catch {
+          apiKey = '';
+        }
+      }
+
+      const response = await fetch('/api/genkit/extractBetFromImageFlow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: dataUrl,
+          bookmakers: bookmakers.map((bk) => bk.name),
+          accounts: (accounts ?? []).map((a) => ({ name: a.name, cpf: a.cpf })),
+          apiKey,
+          model,
+        }),
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || 'Falha ao extrair dados. Verifique a chave do Gemini.');
+      }
+      const result = await response.json();
+      applyExtraction(result);
+    } catch (err: any) {
+      setExtractError(err?.message || 'Não foi possível extrair os dados da imagem.');
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
   const surebetCalculations = React.useMemo(() => {
     if (watchedType !== 'surebet' && watchedType !== 'pa_surebet') {
       return { totalStake: 0, guaranteedProfit: 0, profitPercentage: 0, minCashback: 0, maxCashback: 0 };
@@ -380,7 +538,43 @@ useEffect(() => {
         <form onSubmit={handleSubmit(onSubmit) as any} className="flex flex-col flex-1 min-h-0">
             <ScrollArea className="flex-1 min-h-0">
                 <div className="space-y-3 px-4 py-2 sm:space-y-4 sm:px-6">
-                    
+                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                                <Sparkles className="h-4 w-4 text-primary shrink-0" />
+                                <span className="text-sm font-semibold">Extração automática por IA</span>
+                            </div>
+                            <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={isExtracting}>
+                                {isExtracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                                {isExtracting ? 'Analisando...' : 'Enviar imagem'}
+                            </Button>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) handleExtractFromImage(file);
+                                    e.target.value = '';
+                                }}
+                            />
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            Envie um print do comprovante da aposta para preencher os campos automaticamente.
+                        </p>
+                        {extractPreview && (
+                            <div className="flex items-center gap-3">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={extractPreview} alt="Comprovante da aposta" className="h-16 w-16 rounded border object-cover" />
+                                <Button type="button" variant="ghost" size="sm" onClick={() => { setExtractPreview(null); setExtractError(null); }}>
+                                    <X className="h-4 w-4" /> Remover
+                                </Button>
+                            </div>
+                        )}
+                        {extractError && <p className="text-xs text-destructive">{extractError}</p>}
+                    </div>
+
                     <Tabs defaultValue={activeTab} onValueChange={handleTabChange} className="w-full">
                         <TabsList className="flex h-auto w-full justify-start gap-2 overflow-x-auto whitespace-nowrap p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-4 sm:overflow-visible">
                             <TabsTrigger className="flex-shrink-0" value="single">Aposta Simples</TabsTrigger>

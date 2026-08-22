@@ -13,6 +13,10 @@ import { z } from 'genkit';
 
 const GenerateBettingInsightsInputSchema = z.object({
   bettingData: z.string().describe('The user betting data as a JSON string.'),
+  apiKey: z
+    .string()
+    .optional()
+    .describe('Chave da API do Gemini configurada pelo usuario (sobrescreve a do ambiente).'),
 });
 export type GenerateBettingInsightsInput = z.infer<
   typeof GenerateBettingInsightsInputSchema
@@ -39,10 +43,22 @@ export const generateBettingInsightsFlow = ai.defineFlow(
   },
   async (input) => {
     const prompt = `You are an expert betting analyst. Analyze the following betting data and provide insights on the user's betting performance, such as identifying successful betting patterns, areas for improvement, and potential biases in their betting strategy. The betting data is provided as a JSON string:\n\n${input.bettingData}`;
-    const { output } = await ai.generate({
+    const apiKey =
+      input.apiKey ||
+      process.env.GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.GOOGLE_GENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error(
+        'Chave do Gemini não configurada. Salve sua chave na página Configurações.'
+      );
+    }
+    const generateOpts: Parameters<typeof ai.generate>[0] = {
       prompt,
       output: { schema: GenerateBettingInsightsOutputSchema },
-    });
+      config: { apiKey } as any,
+    };
+    const { output } = await ai.generate(generateOpts);
     if (!output) throw new Error('No output from model');
     return output;
   }
