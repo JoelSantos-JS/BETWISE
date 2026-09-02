@@ -40,7 +40,9 @@ import { BookmakerCard } from '@/components/bookmakers/bookmaker-card';
 import { BookmakerForm } from '@/components/bookmakers/bookmaker-form';
 import * as XLSX from 'xlsx';
 import { calculateSurebet } from '@/lib/surebet-calculator';
-import { formatDateSafe } from '@/lib/utils';
+import { formatDateSafe, getBetProfit, toValidDate } from '@/lib/utils';
+import { DailyGoalCard } from '@/components/dashboard/daily-goal-card';
+import { QuickResolveDialog } from '@/components/bets/quick-resolve-dialog';
 
 type ClosedMonthRecord = {
     profit?: number;
@@ -160,6 +162,8 @@ export default function BetsPage() {
     const [isBetFormOpen, setIsBetFormOpen] = useState(false);
     const [betToEdit, setBetToEdit] = useState<Bet | null>(null);
     const [betToDelete, setBetToDelete] = useState<Bet | null>(null);
+    const [betToResolve, setBetToResolve] = useState<Bet | null>(null);
+    const [dailyGoal, setDailyGoal] = useState<number>(0);
     const [isBookmakerFormOpen, setIsBookmakerFormOpen] = useState(false);
     const [bookmakerToEdit, setBookmakerToEdit] = useState<BookmakerType | null>(null);
     const [bookmakerToDelete, setBookmakerToDelete] = useState<BookmakerType | null>(null);
@@ -301,9 +305,11 @@ export default function BetsPage() {
                             initial: typeof data.totalsOverride.initial === 'number' ? data.totalsOverride.initial : undefined,
                         });
                     }
+                    setDailyGoal(typeof data?.dailyProfitGoal === 'number' ? data.dailyProfitGoal : 0);
                 } else {
                     setBankrollReportApplied(false);
                     setClosedMonths({});
+                    setDailyGoal(0);
                 }
             } catch (e) {
                 console.warn('Falha ao carregar configurações do dashboard.', e);
@@ -566,6 +572,33 @@ export default function BetsPage() {
 
         return { currentMonthProfit: currentMonthProfit + fsCurrentMonthProfit, prevMonthProfit: prevMonthProfit + fsPrevMonthProfit, prevMonthLabel };
     }, [bets, freeSpins]);
+
+    // Lucro do dia, usado pela meta diária.
+    const todayProfit = useMemo(() => {
+        const start = startOfDay(new Date());
+        const end = endOfDay(new Date());
+        return bets.reduce((sum, bet) => {
+            const d = toValidDate(bet.date);
+            if (!d || !isWithinInterval(d, { start, end })) return sum;
+            return sum + (getBetProfit(bet) ?? 0);
+        }, 0);
+    }, [bets]);
+
+    // Avisa quando a meta do dia é batida, uma vez por dia (localStorage evita
+    // repetir o toast a cada refresh/recarregamento de dados).
+    useEffect(() => {
+        if (!user || dailyGoal <= 0 || todayProfit < dailyGoal) return;
+        const todayKey = format(new Date(), 'yyyy-MM-dd');
+        const storageKey = `betwise_goal_hit_${user.uid}_${todayKey}`;
+        try {
+            if (localStorage.getItem(storageKey) === 'true') return;
+            localStorage.setItem(storageKey, 'true');
+        } catch {}
+        toast({
+            title: '🎯 Meta do dia batida!',
+            description: `Lucro de ${todayProfit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} hoje (meta: ${dailyGoal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}).`,
+        });
+    }, [user, dailyGoal, todayProfit, toast]);
 
     const closeMonthSummary = useMemo(() => {
         const now = new Date();
@@ -1639,6 +1672,36 @@ export default function BetsPage() {
         setIsBetFormOpen(true);
     }
 
+    // Finalização rápida: atualiza só status/lucro/cenário, sem abrir o formulário inteiro.
+    const handleQuickResolve = async (update: { status: Bet['status']; realizedProfit?: number | null; outcomeScenario?: Bet['outcomeScenario'] }) => {
+        if (!user || !betToResolve) return;
+        const partial = sanitizeForFirestore({
+            status: update.status,
+            realizedProfit: update.realizedProfit ?? null,
+            ...(update.outcomeScenario ? { outcomeScenario: update.outcomeScenario } : {}),
+        });
+        try {
+            await setDoc(doc(db, 'users', user.uid, 'bets', betToResolve.id), partial, { merge: true });
+            setBets(prev => prev.map(b => (b.id === betToResolve.id ? { ...b, ...partial } as Bet : b)));
+            toast({ title: 'Aposta finalizada!', description: `"${betToResolve.event}" marcada como ${betStatusLabels[update.status] ?? update.status}.` });
+            setBetToResolve(null);
+        } catch (error) {
+            console.error('Error resolving bet:', error);
+            toast({ variant: 'destructive', title: 'Erro ao finalizar', description: 'Não foi possível atualizar a aposta.' });
+        }
+    };
+
+    const handleSaveDailyGoal = async (value: number) => {
+        if (!user) return;
+        try {
+            await setDoc(doc(db, 'users', user.uid, 'settings', 'dashboard'), { dailyProfitGoal: value }, { merge: true });
+            setDailyGoal(value);
+        } catch (error) {
+            console.error('Error saving daily goal:', error);
+            toast({ variant: 'destructive', title: 'Erro ao salvar meta', description: 'Não foi possível salvar a meta diária.' });
+        }
+    };
+
     const handleSaveBet = async (betData: Omit<Bet, 'id'>) => {
          if (!user) { toast({ variant: 'destructive', title: 'Erro', description: 'Você precisa estar logado.' }); return; }
         const isEditing = !!betToEdit;
@@ -2112,6 +2175,7 @@ export default function BetsPage() {
                             bet={bet} 
                             onEdit={() => handleOpenBetForm(bet)}
                             onDelete={() => setBetToDelete(bet)}
+                            onResolve={() => setBetToResolve(bet)}
                         />
                     ))}
                  </div>
@@ -2153,7 +2217,11 @@ export default function BetsPage() {
                     </Button>
                 </div>
             </div>
-            
+
+            <div className="mb-6 md:mb-8">
+                <DailyGoalCard goal={dailyGoal} todayProfit={todayProfit} onSaveGoal={handleSaveDailyGoal} />
+            </div>
+
              <div className="mb-8">
                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-4 gap-4">
                      <h3 className="text-2xl font-bold flex items-center gap-2">
@@ -3092,6 +3160,13 @@ export default function BetsPage() {
                     />
                 </DialogContent>
             </Dialog>
+
+            {/* Quick Resolve Dialog */}
+            <QuickResolveDialog
+                bet={betToResolve}
+                onOpenChange={(isOpen) => !isOpen && setBetToResolve(null)}
+                onConfirm={handleQuickResolve}
+            />
 
             {/* Bookmaker Form Dialog */}
             <Dialog open={isBookmakerFormOpen} onOpenChange={isOpen => {

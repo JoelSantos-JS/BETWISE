@@ -1,6 +1,8 @@
 import { clsx, type ClassValue } from "clsx"
 import { format } from "date-fns"
 import { twMerge } from "tailwind-merge"
+import { calculateSurebet } from "@/lib/surebet-calculator"
+import type { Bet } from "@/lib/types"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -50,4 +52,28 @@ export function formatDateSafe(
   } catch {
     return fallback;
   }
+}
+
+// Lucro/prejuízo de uma aposta já resolvida. null quando ainda está pendente
+// (nada resolvido ainda). Mesma regra usada no card da aposta e nos cálculos
+// de meta diária, pra não divergir de tela pra tela.
+export function getBetProfit(bet: Bet): number | null {
+  if (bet.realizedProfit !== null && bet.realizedProfit !== undefined) return bet.realizedProfit;
+  if (bet.status !== 'won' && bet.status !== 'lost') return null;
+
+  if (bet.type === 'single') {
+    const stake = bet.stake ?? 0;
+    const odds = bet.odds ?? 0;
+    if (bet.status === 'won') return stake * odds - stake;
+    if (bet.status === 'lost') return -stake;
+    return 0;
+  }
+
+  if (bet.type === 'surebet' || bet.type === 'pa_surebet') {
+    if (bet.status === 'lost') return -(bet.totalStake ?? 0);
+    const recalculated = bet.subBets ? calculateSurebet(bet.subBets) : null;
+    return recalculated?.guaranteedProfit ?? bet.guaranteedProfit ?? 0;
+  }
+
+  return null;
 }

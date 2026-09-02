@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   Building,
   Calendar,
+  CheckCircle2,
   DollarSign,
   Edit,
   Gift,
@@ -22,9 +23,9 @@ import {
   Zap,
 } from "lucide-react";
 import { Badge } from "../ui/badge";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../ui/accordion";
-import { cn, formatBRL } from "@/lib/utils";
+import { cn, formatBRL, getBetProfit } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 import { calculateSurebet } from "@/lib/surebet-calculator";
 
@@ -32,6 +33,7 @@ interface BetCardProps {
   bet: Bet;
   onEdit: () => void;
   onDelete: () => void;
+  onResolve?: () => void;
 }
 
 const statusMap = {
@@ -48,7 +50,7 @@ const scenarioMap = {
   standard: { label: "", icon: null },
 };
 
-export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
+export function BetCard({ bet, onEdit, onDelete, onResolve }: BetCardProps) {
   const statusInfo = statusMap[bet.status];
   const scenarioInfo = bet.outcomeScenario ? scenarioMap[bet.outcomeScenario] : null;
   const earnedFreebet = Boolean(bet.earnedFreebetValue && bet.earnedFreebetValue > 0);
@@ -58,25 +60,7 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
       ? calculateSurebet(bet.subBets)
       : null;
 
-  const profit = (() => {
-    if (bet.realizedProfit !== null && bet.realizedProfit !== undefined) return bet.realizedProfit;
-    if (bet.status !== "won" && bet.status !== "lost") return null;
-
-    if (bet.type === "single") {
-      const stake = bet.stake ?? 0;
-      const odds = bet.odds ?? 0;
-      if (bet.status === "won") return stake * odds - stake;
-      if (bet.status === "lost") return -stake;
-      return 0;
-    }
-
-    if (bet.type === "surebet" || bet.type === "pa_surebet") {
-      if (bet.status === "lost") return -(bet.totalStake ?? 0);
-      return surebetRecalculated?.guaranteedProfit ?? null;
-    }
-
-    return null;
-  })();
+  const profit = getBetProfit(bet);
 
   return (
     <Card className="flex h-full flex-col overflow-hidden border-l-4" style={{ borderLeftColor: statusInfo.color }}>
@@ -135,6 +119,14 @@ export function BetCard({ bet, onEdit, onDelete }: BetCardProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {bet.status === "pending" && onResolve && (
+                <>
+                  <DropdownMenuItem onClick={onResolve}>
+                    <CheckCircle2 className="mr-2 h-4 w-4" /> Finalizar aposta
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
               <DropdownMenuItem onClick={onEdit}>
                 <Edit className="mr-2 h-4 w-4" /> Editar
               </DropdownMenuItem>
